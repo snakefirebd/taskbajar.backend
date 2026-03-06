@@ -4,9 +4,7 @@ import {
   getAuth, 
   onAuthStateChanged, 
   signInAnonymously, 
-  signInWithCustomToken, 
-  signOut,
-  updateProfile
+  signOut
 } from 'firebase/auth';
 import { 
   getDatabase, 
@@ -15,618 +13,248 @@ import {
   set, 
   update, 
   push, 
-  serverValue, 
-  query, 
-  orderByChild, 
-  equalTo 
+  serverValue 
 } from 'firebase/database';
 import { 
   Home, 
   PlusCircle, 
   User, 
-  Trophy, 
-  ShieldCheck, 
   Settings, 
   LogOut, 
-  Bell, 
-  MessageCircle, 
-  RotateCw, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle,
-  LayoutDashboard
+  RotateCw,
+  LayoutDashboard,
+  ShieldCheck,
+  Trophy
 } from 'lucide-react';
 
-// --- Firebase Configuration ---
-const firebaseConfig = JSON.parse(__firebase_config);
+// --- সরাসরি আপনার ফায়ারবেস কনফিগারেশন বসানো হয়েছে ---
+const firebaseConfig = {
+    apiKey: "AIzaSyDgFaTrHW7Grp_Q22p6KNcHZxaEujHsLsE",
+    authDomain: "exchange-project-d4028.firebaseapp.com",
+    databaseURL: "https://exchange-project-d4028-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "exchange-project-d4028",
+    storageBucket: "exchange-project-d4028.firebasestorage.app",
+    messagingSenderId: "313976742479",
+    appId: "1:313976742479:web:45951b360d875c4768c03a"
+};
+
+const appId = "exchange-project-d4028";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'exchange-project-d4028';
-
-// --- Translation Object ---
-const translations = {
-  bn: {
-    home: "হোম",
-    promote: "প্রমোট",
-    profile: "প্রোফাইল",
-    leaderboard: "র‍্যাঙ্কিং",
-    support: "সাপোর্ট",
-    admin: "অ্যাডমিন",
-    points: "পয়েন্ট",
-    missions: "মিশনসমূহ",
-    loading: "লোড হচ্ছে...",
-    logout: "লগআউট",
-    spin: "স্পিন",
-    bonus: "বোনাস",
-    trust: "ট্রাস্ট স্কোর"
-  },
-  en: {
-    home: "Home",
-    promote: "Promote",
-    profile: "Profile",
-    leaderboard: "Leaderboard",
-    support: "Support",
-    admin: "Admin",
-    points: "Points",
-    missions: "Missions",
-    loading: "Loading...",
-    logout: "Logout",
-    spin: "Spin",
-    bonus: "Bonus",
-    trust: "Trust Score"
-  }
-};
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('home'); // home, promote, profile, leaderboard, support, admin, manage, trust
-  const [lang, setLang] = useState('bn');
+  const [view, setView] = useState('home');
   const [userData, setUserData] = useState(null);
   const [tasks, setTasks] = useState({});
-  const [submissions, setSubmissions] = useState({});
-  const [notifications, setNotifications] = useState([]);
-  const [toast, setToast] = useState({ show: false, msg: '' });
   const [isAdmin, setIsAdmin] = useState(false);
+  const [toast, setToast] = useState({ show: false, msg: '' });
 
-  const t = translations[lang];
-
-  // --- Auth & Initial Data ---
+  // --- ডাটা লোড করা ---
   useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- Realtime Listeners ---
-  useEffect(() => {
-    if (!user) return;
-
-    // User Stats
-    const statsRef = ref(db, `artifacts/${appId}/users/${user.uid}/stats`);
-    onValue(statsRef, (snap) => {
-      setUserData(snap.val());
-    });
-
-    // Admin Check
-    const adminRef = ref(db, `artifacts/${appId}/admins/${user.uid}`);
-    onValue(adminRef, (snap) => {
-      setIsAdmin(snap.val() === true);
+      if (u) {
+        setUser(u);
+        // ইউজার স্ট্যাটাস লোড
+        onValue(ref(db, `artifacts/${appId}/users/${u.uid}/stats`), (snap) => {
+          setUserData(snap.val());
+        });
+        // অ্যাডমিন চেক
+        onValue(ref(db, `artifacts/${appId}/admins/${u.uid}`), (snap) => {
+          setIsAdmin(snap.val() === true);
+        });
+      } else {
+        signInAnonymously(auth);
+      }
     });
 
-    // Public Tasks
-    const tasksRef = ref(db, `artifacts/${appId}/public/data/microtasks`);
-    onValue(tasksRef, (snap) => {
+    // পাবলিক টাস্ক লোড
+    onValue(ref(db, `artifacts/${appId}/public/data/microtasks`), (snap) => {
       setTasks(snap.val() || {});
     });
 
-    // Submissions (Global for management/review)
-    const subsRef = ref(db, `artifacts/${appId}/public/data/submissions`);
-    onValue(subsRef, (snap) => {
-      setSubmissions(snap.val() || {});
-    });
+    return () => unsubscribe();
+  }, []);
 
-    // Notifications
-    const pubNotifRef = ref(db, `artifacts/${appId}/public/notifications`);
-    const pvtNotifRef = ref(db, `artifacts/${appId}/users/${user.uid}/notifications`);
-    
-    const handleNotifs = () => {
-        onValue(pubNotifRef, (pubSnap) => {
-            onValue(pvtNotifRef, (pvtSnap) => {
-                const pubs = pubSnap.val() || {};
-                const pvts = pvtSnap.val() || {};
-                const combined = [
-                    ...Object.keys(pubs).map(k => ({ ...pubs[k], id: k, type: 'public' })),
-                    ...Object.keys(pvts).map(k => ({ ...pvts[k], id: k, type: 'private' }))
-                ];
-                setNotifications(combined.sort((a, b) => b.timestamp - a.timestamp));
-            });
-        });
-    };
-    handleNotifs();
-
-  }, [user]);
-
-  // --- Helpers ---
   const showToast = (msg) => {
     setToast({ show: true, msg });
     setTimeout(() => setToast({ show: false, msg: '' }), 3000);
   };
 
-  // --- Actions ---
-  const claimDailyBonus = async () => {
-    try {
-        const token = await auth.currentUser.getIdToken();
-        const response = await fetch('https://taskbajar-backend.vercel.app/api/daily-bonus', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-        });
-        const data = await response.json();
-        showToast(data.message || data.error);
-    } catch (e) { showToast("Network Error!"); }
-  };
-
-  // --- Views ---
-
-  const Header = () => (
-    <div style={{
+  // --- স্টাইলস (Inline CSS) ---
+  const styles = {
+    container: {
+      maxWidth: '480px',
+      margin: '0 auto',
+      minHeight: '100vh',
+      backgroundColor: '#f8fafc',
+      paddingBottom: '100px',
+      position: 'relative'
+    },
+    header: {
       background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-      padding: '15px 20px 25px',
+      padding: '20px',
+      color: 'white',
       borderBottomLeftRadius: '25px',
       borderBottomRightRadius: '25px',
-      color: 'white',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       position: 'sticky',
       top: 0,
       zIndex: 100
-    }}>
-      <div className="flex justify-between items-center max-w-lg mx-auto">
-        <div className="flex items-center gap-3">
-          <div style={{
-            width: '40px', height: '40px', borderRadius: '12px',
-            background: 'rgba(255,255,255,0.2)', border: '1.5px solid rgba(255,255,255,0.4)',
-            overflow: 'hidden'
-          }}>
-            <img 
-              src={userData?.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} 
-              alt="Avatar" 
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div>
-            <h2 style={{ fontSize: '0.8rem', fontWeight: 800 }}>{userData?.name || 'Elite Member'}</h2>
-            <div className="flex gap-2 mt-1">
-                <span style={{ fontSize: '0.5rem', fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '1px 5px', borderRadius: '5px' }}>PRO</span>
-                {isAdmin && <span style={{ fontSize: '0.5rem', fontWeight: 800, background: '#ef4444', padding: '1px 5px', borderRadius: '5px' }}>ADMIN</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')} className="cursor-pointer bg-white/20 px-2 py-1 rounded-lg text-[10px] font-bold">
-            {lang.toUpperCase()}
-          </div>
-          <div style={{
-            background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)',
-            padding: '5px 12px', borderRadius: '15px', border: '1px solid rgba(255,255,255,0.3)',
-            textAlign: 'right'
-          }}>
-            <span style={{ fontSize: '0.5rem', display: 'block', textTransform: 'uppercase', opacity: 0.8 }}>{t.points}</span>
-            <b style={{ fontSize: '1rem' }}>{userData?.points || 0}</b>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const BottomNav = () => (
-    <div className="fixed bottom-0 left-0 right-0 p-4 z-50 pointer-events-none">
-      <div className="max-w-md mx-auto bg-white/90 backdrop-blur-xl rounded-[24px] shadow-2xl border border-white flex justify-around items-center h-16 pointer-events-auto">
-        <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 ${view === 'home' ? 'text-indigo-600' : 'text-slate-400'}`}>
-          <Home size={20} />
-          <span className="text-[10px] font-bold">{t.home}</span>
-        </button>
-        <button onClick={() => setView('promote')} className={`flex flex-col items-center gap-1 ${view === 'promote' ? 'text-indigo-600' : 'text-slate-400'}`}>
-          <PlusCircle size={20} />
-          <span className="text-[10px] font-bold">{t.promote}</span>
-        </button>
-        <button onClick={() => setView('profile')} className={`flex flex-col items-center gap-1 ${view === 'profile' ? 'text-indigo-600' : 'text-slate-400'}`}>
-          <User size={20} />
-          <span className="text-[10px] font-bold">{t.profile}</span>
-        </button>
-        <button onClick={() => setView('manage')} className={`flex flex-col items-center gap-1 ${view === 'manage' ? 'text-indigo-600' : 'text-slate-400'}`}>
-          <Settings size={20} />
-          <span className="text-[10px] font-bold">ম্যানেজ</span>
-        </button>
-        {isAdmin && (
-          <button onClick={() => setView('admin')} className={`flex flex-col items-center gap-1 ${view === 'admin' ? 'text-red-600' : 'text-slate-400'}`}>
-            <LayoutDashboard size={20} />
-            <span className="text-[10px] font-bold">অ্যাডমিন</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // --- Sub-Views ---
-
-  const HomeView = () => {
-    const sortedTasks = Object.keys(tasks).reverse();
-    return (
-      <div className="p-5 max-w-lg mx-auto">
-        {/* Quick Actions */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div onClick={() => setView('spin')} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center cursor-pointer">
-            <span className="text-2xl block mb-1">🎡</span>
-            <span className="text-[10px] font-extrabold text-indigo-600 uppercase">স্পিন</span>
-          </div>
-          <div onClick={claimDailyBonus} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center cursor-pointer">
-            <span className="text-2xl block mb-1">🎁</span>
-            <span className="text-[10px] font-extrabold text-emerald-600 uppercase">বোনাস</span>
-          </div>
-          <div onClick={() => setView('trust')} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center cursor-pointer">
-            <span className="text-2xl block mb-1">🛡️</span>
-            <span className="text-[10px] font-extrabold text-amber-600 uppercase">স্কোর</span>
-          </div>
-        </div>
-
-        <h3 className="text-slate-800 font-extrabold mb-4 text-sm flex items-center gap-2">
-            <RotateCw size={16} className="text-indigo-500" />
-            {t.missions}
-        </h3>
-
-        <div className="space-y-3">
-          {sortedTasks.map(id => {
-            const task = tasks[id];
-            // Filter out tasks by current user
-            if (task.creatorId === user?.uid) return null;
-            
-            return (
-              <div key={id} onClick={() => openTaskDetail(id)} className="bg-white p-4 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm active:scale-95 transition-transform cursor-pointer">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800">{task.title}</h4>
-                  <p className="text-[10px] font-extrabold text-emerald-500 mt-1">+{task.reward} {t.points}</p>
-                </div>
-                <div className="bg-slate-50 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400">
-                  <PlusCircle size={16} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    },
+    card: {
+      backgroundColor: 'white',
+      borderRadius: '20px',
+      padding: '15px',
+      marginBottom: '15px',
+      border: '1px solid #e2e8f0',
+      cursor: 'pointer'
+    },
+    nav: {
+      position: 'fixed',
+      bottom: '15px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '90%',
+      maxWidth: '450px',
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      backdropFilter: 'blur(10px)',
+      borderRadius: '20px',
+      padding: '12px',
+      display: 'flex',
+      justifyContent: 'space-around',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+      border: '1px solid #fff'
+    },
+    navItem: (active) => ({
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      color: active ? '#6366f1' : '#94a3b8',
+      fontSize: '10px',
+      fontWeight: 'bold',
+      gap: '4px',
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer'
+    })
   };
-
-  const [selectedTask, setSelectedTask] = useState(null);
-  const openTaskDetail = (id) => {
-    setSelectedTask({ ...tasks[id], id });
-    setView('detail');
-  };
-
-  const TaskDetailView = () => (
-    <div className="p-5 max-w-lg mx-auto">
-      <div className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-lg">
-        <h2 className="text-lg font-extrabold mb-2">{selectedTask?.title}</h2>
-        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-xs font-bold inline-block mb-4">
-          পুরস্কার: {selectedTask?.reward} পয়েন্ট
-        </span>
-        <p className="text-slate-500 text-xs mb-6">নিচের লিঙ্কটি ভিজিট করুন এবং কাজ সম্পন্ন করে প্রমাণ সাবমিট করুন।</p>
-        
-        <a 
-          href={selectedTask?.link} 
-          target="_blank" 
-          className="block w-full text-center bg-slate-100 text-indigo-600 py-3 rounded-xl font-bold text-sm mb-6 border border-slate-200"
-        >
-          মিশন শুরু করুন 🔗
-        </a>
-
-        <div className="mb-4">
-          <label className="text-[10px] font-extrabold text-slate-400 uppercase ml-1">প্রমাণ (ইউজারনেম বা লিঙ্ক)</label>
-          <textarea 
-            id="proof-text"
-            className="w-full mt-2 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500"
-            rows="3"
-            placeholder="আপনার কাজের প্রমাণ এখানে লিখুন..."
-          ></textarea>
-        </div>
-
-        <button 
-          onClick={async () => {
-            const proof = document.getElementById('proof-text').value.trim();
-            if(!proof) return showToast("প্রমাণ প্রয়োজন!");
-            await push(ref(db, `artifacts/${appId}/public/data/submissions/${selectedTask.id}`), {
-                userId: user.uid,
-                proof,
-                status: 'pending',
-                timestamp: serverValue.TIMESTAMP
-            });
-            showToast("সাফল্যজনকভাবে সাবমিট হয়েছে!");
-            setView('home');
-          }}
-          className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-200"
-        >
-          সাবমিট করুন
-        </button>
-        <button onClick={() => setView('home')} className="w-full mt-3 text-slate-400 font-bold text-xs py-2">বাতিল করুন</button>
-      </div>
-    </div>
-  );
-
-  const PromoteView = () => {
-    const [campaign, setCampaign] = useState({ title: '', link: '', type: 'YouTube Subscribe', qty: 10 });
-    const rates = { "YouTube Subscribe": 5, "Facebook Like": 3, "Telegram Join": 4, "App Install": 10 };
-    const total = campaign.qty * rates[campaign.type];
-
-    const launchCampaign = async () => {
-        if(!campaign.title || !campaign.link) return showToast("সব তথ্য দিন!");
-        if(campaign.qty < 10) return showToast("নূন্যতম ১০ জন প্রয়োজন!");
-        if(total > userData.points) return showToast("পর্যাপ্ত পয়েন্ট নেই!");
-
-        try {
-            const token = await auth.currentUser.getIdToken();
-            const response = await fetch('https://taskbajar-backend.vercel.app/api/create-campaign', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...campaign, totalCost: total, reward: rates[campaign.type] - 1 })
-            });
-            const data = await response.json();
-            if(data.success) {
-                showToast("ক্যাম্পেইন লাইভ হয়েছে! 🚀");
-                setView('home');
-            } else {
-                showToast(data.error);
-            }
-        } catch(e) { showToast("Error!"); }
-    };
-
-    return (
-        <div className="p-5 max-w-lg mx-auto pb-24">
-            <h3 className="text-slate-800 font-extrabold mb-4 text-sm px-1">নতুন ক্যাম্পেইন তৈরি করুন</h3>
-            <div className="bg-white p-5 rounded-[28px] border border-slate-200 shadow-sm">
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">ক্যাটাগরি</label>
-                        <select 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
-                            value={campaign.type}
-                            onChange={(e) => setCampaign({...campaign, type: e.target.value})}
-                        >
-                            {Object.keys(rates).map(r => <option key={r} value={r}>{r} ({rates[r]} pts)</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">টাইটেল</label>
-                        <input 
-                            type="text" 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                            placeholder="যেমন: চ্যানেল সাবস্ক্রাইব করুন"
-                            onChange={(e) => setCampaign({...campaign, title: e.target.value})}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">লিঙ্ক (URL)</label>
-                        <input 
-                            type="url" 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                            placeholder="https://..."
-                            onChange={(e) => setCampaign({...campaign, link: e.target.value})}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">পরিমাণ (মিনিমাম ১০)</label>
-                        <input 
-                            type="number" 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                            value={campaign.qty}
-                            onChange={(e) => setCampaign({...campaign, qty: parseInt(e.target.value) || 0})}
-                        />
-                    </div>
-
-                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex justify-between items-center mt-6">
-                        <span className="text-xs font-bold text-indigo-600">মোট খরচ:</span>
-                        <b className="text-indigo-700 text-lg">{total} Pts</b>
-                    </div>
-
-                    <button 
-                        onClick={launchCampaign}
-                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg mt-4"
-                    >
-                        লঞ্চ ক্যাম্পেইন 🚀
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-  };
-
-  const ManageView = () => {
-    const myTasks = Object.keys(tasks).filter(id => tasks[id].creatorId === user?.uid);
-    return (
-        <div className="p-5 max-w-lg mx-auto pb-24">
-            <h3 className="text-slate-800 font-extrabold mb-4 text-sm">আমার ক্যাম্পেইনসমূহ</h3>
-            <div className="space-y-4">
-                {myTasks.length === 0 && <p className="text-center text-slate-400 text-xs py-10">আপনার কোনো সক্রিয় ক্যাম্পেইন নেই।</p>}
-                {myTasks.map(id => {
-                    const task = tasks[id];
-                    const subs = submissions[id] || {};
-                    const pendingCount = Object.values(subs).filter(s => s.status === 'pending').length;
-                    return (
-                        <div key={id} className="bg-white p-5 rounded-[22px] border border-slate-200 shadow-sm">
-                            <h4 className="font-bold text-sm mb-2">{task.title}</h4>
-                            <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-4">
-                                <span>টার্গেট: {task.qty}</span>
-                                <span className="text-orange-500">পেন্ডিং প্রুফ: {pendingCount}</span>
-                            </div>
-                            <button 
-                                onClick={() => { setSelectedTask({ ...task, id }); setView('review'); }}
-                                className="w-full bg-slate-100 text-slate-700 py-2 rounded-lg text-xs font-bold"
-                            >
-                                রিভিউ প্রুফ
-                            </button>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-  };
-
-  const ReviewView = () => {
-    const subs = submissions[selectedTask.id] || {};
-    const pendingSubs = Object.keys(subs).filter(k => subs[k].status === 'pending');
-
-    const handleReview = async (subId, workerId, status) => {
-        try {
-            const token = await auth.currentUser.getIdToken();
-            const response = await fetch('https://taskbajar-backend.vercel.app/api/review-proof', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    taskId: selectedTask.id,
-                    subId,
-                    workerId,
-                    rewardPoints: selectedTask.reward,
-                    newStatus: status
-                })
-            });
-            const data = await response.json();
-            if(data.success) showToast(status === 'approved' ? "Approved! ✅" : "Rejected! ❌");
-        } catch(e) { showToast("Error!"); }
-    };
-
-    return (
-        <div className="p-5 max-w-lg mx-auto pb-24">
-            <div className="flex items-center gap-2 mb-4">
-                <button onClick={() => setView('manage')} className="text-slate-400">❮</button>
-                <h3 className="text-slate-800 font-extrabold text-sm">প্রুফ রিভিউ: {selectedTask.title}</h3>
-            </div>
-            <div className="space-y-3">
-                {pendingSubs.length === 0 && <p className="text-center text-slate-400 text-xs py-10">কোন পেন্ডিং প্রুফ নেই।</p>}
-                {pendingSubs.map(sid => {
-                    const s = subs[sid];
-                    return (
-                        <div key={sid} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                            <p className="text-xs text-slate-400 font-bold mb-1">প্রমাণ:</p>
-                            <p className="text-sm font-bold bg-slate-50 p-3 rounded-lg border border-dashed border-slate-300 mb-4 break-all">
-                                {s.proof}
-                            </p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button 
-                                    onClick={() => handleReview(sid, s.userId, 'approved')}
-                                    className="bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold"
-                                >
-                                    Approve ✅
-                                </button>
-                                <button 
-                                    onClick={() => handleReview(sid, s.userId, 'rejected')}
-                                    className="bg-red-500 text-white py-2 rounded-xl text-xs font-bold"
-                                >
-                                    Reject ❌
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-  };
-
-  const ProfileView = () => (
-    <div className="p-5 max-w-lg mx-auto pb-24 text-center">
-        <div className="bg-white p-8 rounded-[35px] border border-slate-100 shadow-xl mb-6">
-            <div className="relative inline-block mb-4">
-                <div className="w-24 h-24 rounded-[30px] overflow-hidden border-4 border-white shadow-lg mx-auto bg-slate-100">
-                    <img src={userData?.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} alt="Big Avatar" />
-                </div>
-                <div className="absolute bottom-[-5px] right-[-5px] bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-md cursor-pointer">
-                    ✎
-                </div>
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-800">{userData?.name || 'User Name'}</h2>
-            <p className="text-slate-400 text-xs font-bold mt-1">{user?.email}</p>
-            
-            <div className="grid grid-cols-2 gap-4 mt-8">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">পয়েন্ট</span>
-                    <b className="text-indigo-600 text-lg">{userData?.points || 0}</b>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">মিশন</span>
-                    <b className="text-indigo-600 text-lg">{userData?.tasksCompleted || 0}</b>
-                </div>
-            </div>
-
-            <div className="mt-6 bg-emerald-50 p-4 rounded-2xl border border-dashed border-emerald-200 flex justify-between items-center">
-                <div className="text-left">
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase block">রেফার কোড</span>
-                    <b className="text-emerald-700 text-lg tracking-widest">{userData?.referralCode || '------'}</b>
-                </div>
-                <button 
-                    onClick={() => {
-                        const code = userData?.referralCode;
-                        if(code) {
-                            document.execCommand('copy'); // Simplified
-                            showToast("Copied! 📋");
-                        }
-                    }}
-                    className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold"
-                >
-                    কপি
-                </button>
-            </div>
-
-            <button 
-                onClick={() => signOut(auth)}
-                className="w-full mt-10 bg-red-50 text-red-500 py-3 rounded-2xl font-extrabold text-sm border border-red-100 flex items-center justify-center gap-2"
-            >
-                <LogOut size={16} /> লগআউট করুন
-            </button>
-        </div>
-    </div>
-  );
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f8fafc',
-      fontFamily: "'Plus Jakarta Sans', sans-serif"
-    }}>
+    <div style={styles.container}>
+      {/* টোস্ট নোটিফিকেশন */}
       {toast.show && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[3000] bg-slate-900 text-white px-6 py-2 rounded-full text-xs font-bold shadow-xl animate-bounce">
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: '#1e293b', color: 'white', padding: '10px 20px', borderRadius: '50px',
+          fontSize: '12px', zIndex: 1000, boxShadow: '0 4px 15px rgba(0,0,0,0.2)'
+        }}>
           {toast.msg}
         </div>
       )}
 
-      <Header />
-      
-      <main className="pb-24">
-        {view === 'home' && <HomeView />}
-        {view === 'promote' && <PromoteView />}
-        {view === 'profile' && <ProfileView />}
-        {view === 'manage' && <ManageView />}
-        {view === 'detail' && <TaskDetailView />}
-        {view === 'review' && <ReviewView />}
-        {/* Placeholder Views */}
-        {(view === 'spin' || view === 'trust' || view === 'admin') && (
-            <div className="p-10 text-center text-slate-400 italic text-sm">
-                এই ফিচারটি শীঘ্রই Next.js মডিউলে অপ্টিমাইজ করা হবে... <br/>
-                <button onClick={() => setView('home')} className="mt-4 text-indigo-500 font-bold underline">হোমে ফিরে যান</button>
-            </div>
-        )}
-      </main>
+      {/* হেডার */}
+      <div style={styles.header}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img 
+            src={userData?.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} 
+            style={{ width: '35px', height: '35px', borderRadius: '10px', objectFit: 'cover', border: '2px solid white' }}
+          />
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 800 }}>{userData?.name || 'Loading...'}</div>
+            <div style={{ fontSize: '10px', opacity: 0.8 }}>Elite Member</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', background: 'rgba(255,255,255,0.2)', padding: '5px 12px', borderRadius: '12px' }}>
+          <div style={{ fontSize: '8px', textTransform: 'uppercase', fontWeight: 700 }}>Points</div>
+          <div style={{ fontSize: '14px', fontWeight: 800 }}>{userData?.points || 0}</div>
+        </div>
+      </div>
 
-      <BottomNav />
+      {/* কন্টেন্ট */}
+      <div style={{ padding: '20px' }}>
+        {view === 'home' && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+              <button style={{ ...styles.card, textAlign: 'center' }}>🎡<br/><span style={{ fontSize: '10px', fontWeight: 800 }}>SPIN</span></button>
+              <button style={{ ...styles.card, textAlign: 'center' }}>🎁<br/><span style={{ fontSize: '10px', fontWeight: 800 }}>BONUS</span></button>
+              <button style={{ ...styles.card, textAlign: 'center' }}>🛡️<br/><span style={{ fontSize: '10px', fontWeight: 800 }}>TRUST</span></button>
+            </div>
+            
+            <h3 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '15px' }}>উপলব্ধ মিশনসমূহ</h3>
+            <div className="space-y-3">
+              {Object.keys(tasks).reverse().map(id => (
+                <div key={id} style={styles.card} onClick={() => showToast("মিশনটি ওপেন হচ্ছে...")}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '14px' }}>{tasks[id].title}</div>
+                      <div style={{ color: '#10b981', fontWeight: 800, fontSize: '12px', marginTop: '4px' }}>+{tasks[id].reward} Points</div>
+                    </div>
+                    <div style={{ color: '#cbd5e1' }}>❯</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {view === 'profile' && (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '30px', border: '1px solid #e2e8f0' }}>
+              <img src={userData?.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} style={{ width: '80px', height: '80px', borderRadius: '25px', marginBottom: '15px' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 800 }}>{userData?.name}</h2>
+              <p style={{ fontSize: '12px', color: '#94a3b8' }}>{user?.email || 'Anonymous Account'}</p>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '20px' }}>
+                <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '15px' }}>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>POINTS</span><br/>
+                  <b style={{ color: '#6366f1' }}>{userData?.points || 0}</b>
+                </div>
+                <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '15px' }}>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>TASKS</span><br/>
+                  <b style={{ color: '#6366f1' }}>{userData?.tasksCompleted || 0}</b>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => signOut(auth).then(() => window.location.reload())}
+                style={{ marginTop: '20px', width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #fee2e2', color: '#ef4444', fontWeight: 800, cursor: 'pointer', background: '#fff' }}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* বটম ন্যাভিগেশন */}
+      <div style={styles.nav}>
+        <button style={styles.navItem(view === 'home')} onClick={() => setView('home')}>
+          <Home size={20} />
+          <span>HOME</span>
+        </button>
+        <button style={styles.navItem(view === 'promote')} onClick={() => setView('promote')}>
+          <PlusCircle size={20} />
+          <span>PROMOTE</span>
+        </button>
+        <button style={styles.navItem(view === 'leaderboard')} onClick={() => setView('leaderboard')}>
+          <Trophy size={20} />
+          <span>LEADERBOARD</span>
+        </button>
+        <button style={styles.navItem(view === 'profile')} onClick={() => setView('profile')}>
+          <User size={20} />
+          <span>PROFILE</span>
+        </button>
+        {isAdmin && (
+          <button style={styles.navItem(view === 'admin')} onClick={() => setView('admin')}>
+            <LayoutDashboard size={20} />
+            <span>ADMIN</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
