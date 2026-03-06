@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
-import { getDatabase, ref, onValue, set, serverTimestamp } from 'firebase/database';
+"use client";
 
-// 1. Firebase Configuration (From your original code)
+import React, { useEffect, useState, useRef } from 'react';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { getDatabase, ref, onValue, set, serverTimestamp, get } from 'firebase/database';
+
+// Firebase Config
 const firebaseConfig = {
     apiKey: "AIzaSyDgFaTrHW7Grp_Q22p6KNcHZxaEujHsLsE",
     authDomain: "exchange-project-d4028.firebaseapp.com",
@@ -14,210 +16,275 @@ const firebaseConfig = {
     appId: "1:313976742479:web:45951b360d875c4768c03a"
 };
 
-// Initialize Firebase outside component to prevent re-initialization
-const app = initializeApp(firebaseConfig);
+// Next.js এ একাধিকবার ইনিশিয়ালাইজেশন এড়াতে এই পদ্ধতি
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getDatabase(app);
-const targetAppId = "exchange-project-d4028";
+const appId = "exchange-project-d4028";
 
-// 2. Translations
 const translations = {
     bn: {
+        authTagline: "প্রিমিয়াম মাইক্রো-টাস্ক প্ল্যাটফর্ম",
+        fullName: "সম্পূর্ণ নাম", referCode: "রেফার কোড (ঐচ্ছিক)", email: "ইমেইল অ্যাড্রেস", password: "গোপন পাসওয়ার্ড",
         points: "পয়েন্ট", spin: "লাকি স্পিন", gift: "ডেইলি বোনাস", offers: "স্পেশাল অফার", missions: "উপলব্ধ মিশন",
+        directChatText: "সরাসরি এডমিনের সাথে কথা বলতে:", adminSupportBtn: "এডমিন সাপোর্ট (চ্যাট)",
+        pageHome: "হোম / মিশন", pagePromote: "প্রমোট পেজ", pageProfile: "প্রোফাইল পেজ", pageSpin: "স্পিন / বোনাস", pagePayment: "পেমেন্ট সমস্যা",
         navMissions: "মিশন", navPromote: "প্রমোট", navChat: "অভিযোগ", navProfile: "প্রোফাইল",
-        statusPending: "পেন্ডিং", statusSolved: "সমাধান হয়েছে",
+        adminReply: "এডমিনের উত্তর:", statusPending: "পেন্ডিং", statusSolved: "সমাধান হয়েছে", logout: "লগআউট",
         performTask: "কাজটি সম্পন্ন করুন 🔗", missionReward: "মিশন রিওয়ার্ড:", proofLabel: "প্রমাণ (ইউজারনেম/লিঙ্ক)", submitBtn: "সাবমিট করুন", cancelBtn: "বাতিল", backBtn: "পিছনে যান",
-        notifTitle: "সিস্টেম নোটিফিকেশন", noNotif: "নতুন কোন নোটিফিকেশন নেই", support: "সাপোর্ট চ্যাট"
+        verifyEmailTitle: "ইমেইল ভেরিফাই করুন", verifyEmailMsg: "আমরা আপনার ইমেইলে একটি ভেরিফিকেশন লিঙ্ক পাঠিয়েছি। অনুগ্রহ করে আপনার ইনবক্স চেক করুন।",
+        checkVerifyBtn: "ভেরিফিকেশন চেক করুন", resendLinkBtn: "লিঙ্ক পুনরায় পাঠান",
+        notifTitle: "সিস্টেম নোটিফিকেশন", noNotif: "নতুন কোন নোটিফিকেশন নেই"
     },
     en: {
+        authTagline: "The Premium Micro-Task Platform",
+        fullName: "Full Name", referCode: "Refer Code (Optional)", email: "Email Address", password: "Secret Password",
         points: "Points", spin: "Lucky Spin", gift: "Daily Gift", offers: "Special Offer", missions: "Available Missions",
+        directChatText: "To talk directly with Admin:", adminSupportBtn: "Admin Support (Chat)",
+        pageHome: "Home / Missions", pagePromote: "Promote Page", pageProfile: "Profile Page", pageSpin: "Spin / Bonus", pagePayment: "Payment Issue",
         navMissions: "Missions", navPromote: "Promote", navChat: "Complaint", navProfile: "Profile",
-        statusPending: "Pending", statusSolved: "Solved",
+        adminReply: "Admin Reply:", statusPending: "Pending", statusSolved: "Solved", logout: "Logout",
         performTask: "Perform Task 🔗", missionReward: "Mission Reward:", proofLabel: "Proof (Username/Link)", submitBtn: "Submit", cancelBtn: "Cancel", backBtn: "Back",
-        notifTitle: "System Notifications", noNotif: "No notifications found", support: "Support Chat"
+        verifyEmailTitle: "Verify Your Email", verifyEmailMsg: "We've sent a verification link to your email. Please check your inbox.",
+        checkVerifyBtn: "Check Verification Status", resendLinkBtn: "Resend Link",
+        notifTitle: "System Notifications", noNotif: "No notifications found"
     }
 };
 
 const prizes = [
-    { label: "0", color: "#f43f5e" }, { label: "2", color: "#6366f1" }, { label: "5", color: "#10b981" }, { label: "10", color: "#f59e0b" },
-    { label: "20", color: "#a855f7" }, { label: "0", color: "#64748b" }, { label: "50", color: "#ec4899" }, { label: "5", color: "#06b6d4" }
+    { label: "0", color: "#f43f5e" }, { label: "2", color: "#6366f1" },
+    { label: "5", color: "#10b981" }, { label: "10", color: "#f59e0b" },
+    { label: "20", color: "#a855f7" }, { label: "0", color: "#64748b" },
+    { label: "50", color: "#ec4899" }, { label: "5", color: "#06b6d4" }
 ];
 
-export default function App() {
-    // State Management
+export default function TaskBazarApp() {
     const [user, setUser] = useState(null);
-    const [isGuestMode, setIsGuestMode] = useState(false);
-    const [showAuthPopup, setShowAuthPopup] = useState(false);
-    const [currentView, setCurrentView] = useState('list-view');
-    const [lang, setLang] = useState('bn');
-    const [toastMsg, setToastMsg] = useState('');
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [userData, setUserData] = useState({ points: 0, name: "User", avatar: "" });
+    const [currentLang, setCurrentLang] = useState('bn');
+    const [view, setView] = useState('list-view');
+    const [navOpen, setNavOpen] = useState(false);
     
-    // Data States
-    const [userData, setUserData] = useState({ points: 0, name: "Elite Member", avatar: "" });
-    const [notice, setNotice] = useState("");
-    const [tasks, setTasks] = useState({});
-    const [submissions, setSubmissions] = useState({});
+    // State for Data
+    const [systemNotice, setSystemNotice] = useState("");
+    const [tasks, setTasks] = useState([]);
     const [notifications, setNotifications] = useState([]);
     const [hasNewNotif, setHasNewNotif] = useState(false);
-    const [chatMessages, setChatMessages] = useState({});
-    
-    // Action States
+    const [chatMessages, setChatMessages] = useState([]);
     const [selectedTask, setSelectedTask] = useState(null);
-    const [proofText, setProofText] = useState("");
+    
+    // UI State
+    const [toast, setToast] = useState({ msg: "", visible: false });
+    const [showAuthPopup, setShowAuthPopup] = useState(false);
     const [chatInput, setChatInput] = useState("");
+    const [proofInput, setProofInput] = useState("");
     const [isSpinning, setIsSpinning] = useState(false);
     
     // Refs
     const wheelRef = useRef(null);
+    const canvasRef = useRef(null);
     const chatBoxRef = useRef(null);
     const authPopupTimer = useRef(null);
 
-    const t = translations[lang];
+    const t = translations[currentLang];
 
-    // Helper: Show Toast
-    const showToast = (msg) => {
-        setToastMsg(msg);
-        setTimeout(() => setToastMsg(''), 3000);
-    };
-
-    // Firebase Init & Auth Listener
+    // Hydration fix & Init
     useEffect(() => {
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth error:", error);
-            }
-        };
-        initAuth();
+        const savedLang = localStorage.getItem('elite_lang') || 'bn';
+        setCurrentLang(savedLang);
+        const lastView = localStorage.getItem('last_view') || 'list-view';
+        setView(lastView);
 
+        // Auth Listener
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            if (currentUser && !currentUser.isAnonymous) {
-                // Real logged-in user
+            if (currentUser && currentUser.emailVerified) {
                 setUser(currentUser);
-                setIsGuestMode(false);
+                localStorage.setItem('isLoggedIn', 'true');
                 setShowAuthPopup(false);
-                if (authPopupTimer.current) clearTimeout(authPopupTimer.current);
+                clearTimeout(authPopupTimer.current);
             } else {
-                // Guest / Anonymous (Simulating logged out state for your app UI)
-                setUser(currentUser); // Keep anonymous user for DB rules if needed
-                setIsGuestMode(true);
-                setShowAuthPopup(true);
+                setUser(null);
+                localStorage.removeItem('isLoggedIn');
+                triggerAuthPopup();
             }
         });
 
-        // Load language preference
-        const savedLang = localStorage.getItem('elite_lang');
-        if (savedLang) setLang(savedLang);
-
-        const savedView = localStorage.getItem('last_view');
-        if (savedView) setCurrentView(savedView);
+        loadSystemNotice();
 
         return () => unsubscribe();
     }, []);
 
-    // Guest Mode Timer
-    const handleHideAuthPopup = () => {
-        setShowAuthPopup(false);
-        if (authPopupTimer.current) clearTimeout(authPopupTimer.current);
-        authPopupTimer.current = setTimeout(() => setShowAuthPopup(true), 60000); // 1 min
+    // Change View logic
+    const handleSetView = (newView) => {
+        setView(newView);
+        localStorage.setItem('last_view', newView);
+        if (newView === 'spin-view') {
+            setTimeout(drawWheel, 100);
+        }
     };
 
+    // Require Auth Helper
     const requireAuth = () => {
-        if (isGuestMode) {
-            setShowAuthPopup(true);
+        if (!user) {
+            triggerAuthPopup();
             return false;
         }
         return true;
     };
 
-    // Data Fetching (Realtime Database)
+    const triggerAuthPopup = () => {
+        setShowAuthPopup(true);
+    };
+
+    const handleHideAuthPopup = () => {
+        setShowAuthPopup(false);
+        clearTimeout(authPopupTimer.current);
+        authPopupTimer.current = setTimeout(triggerAuthPopup, 60000); // 1 minute
+    };
+
+    const showToast = (msg) => {
+        setToast({ msg, visible: true });
+        setTimeout(() => setToast({ msg: "", visible: false }), 3000);
+    };
+
+    const toggleMenu = () => setNavOpen(!navOpen);
+
+    const changeLang = (lang) => {
+        setCurrentLang(lang);
+        localStorage.setItem('elite_lang', lang);
+    };
+
+    // Load Realtime Data
     useEffect(() => {
-        // Public Data (Loads for everyone)
-        const noticeRef = ref(db, `artifacts/${targetAppId}/public/settings/notice`);
-        const tasksRef = ref(db, `artifacts/${targetAppId}/public/data/microtasks`);
-        const subsRef = ref(db, `artifacts/${targetAppId}/public/data/submissions`);
+        if (!user) return;
 
-        onValue(noticeRef, (s) => setNotice(s.val() || ""));
-        onValue(tasksRef, (s) => setTasks(s.val() || {}));
-        onValue(subsRef, (s) => setSubmissions(s.val() || {}));
-
-        // Private Data (Only if logged in / has valid uid)
-        if (user) {
-            const statsRef = ref(db, `artifacts/${targetAppId}/users/${user.uid}/stats`);
-            onValue(statsRef, (s) => {
-                const d = s.val() || {};
-                setUserData({
-                    points: d.points || 0,
-                    name: d.name || "User",
-                    avatar: d.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"
-                });
+        // Sync User Data (Realtime Database)
+        const statsRef = ref(db, `artifacts/${appId}/users/${user.uid}/stats`);
+        const unsubStats = onValue(statsRef, (snap) => {
+            const data = snap.val() || {};
+            setUserData({
+                points: data.points || 0,
+                name: data.name || "User",
+                avatar: data.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"
             });
+            localStorage.setItem('user_cache_data', JSON.stringify(data));
+        });
 
-            // Notifications logic
-            const pubNotifRef = ref(db, `artifacts/${targetAppId}/public/notifications`);
-            const pvtNotifRef = ref(db, `artifacts/${targetAppId}/users/${user.uid}/notifications`);
-            
-            const handleNotifs = () => {
-                let combined = [];
-                onValue(pubNotifRef, (pubSnap) => {
-                    const pubs = pubSnap.val() || {};
-                    Object.keys(pubs).forEach(id => combined.push({...pubs[id], id, scope: 'public'}));
-                    
-                    onValue(pvtNotifRef, (pvtSnap) => {
-                        const pvts = pvtSnap.val() || {};
-                        Object.keys(pvts).forEach(id => combined.push({...pvts[id], id, scope: 'private'}));
-                        
-                        combined.sort((a,b) => b.timestamp - a.timestamp);
-                        setNotifications(combined);
-                        
-                        const lastChecked = localStorage.getItem('last_notif_check') || 0;
-                        setHasNewNotif(combined.some(n => n.timestamp > lastChecked));
-                    }, { onlyOnce: true });
-                }, { onlyOnce: true });
-            };
-            
-            onValue(pubNotifRef, handleNotifs);
-            onValue(pvtNotifRef, handleNotifs);
+        // Notifications (Realtime Database)
+        const pubNotifRef = ref(db, `artifacts/${appId}/public/notifications`);
+        const pvtNotifRef = ref(db, `artifacts/${appId}/users/${user.uid}/notifications`);
+        
+        const lastChecked = parseInt(localStorage.getItem('last_notif_check') || "0");
 
-            // Support Chat
-            const chatRef = ref(db, `artifacts/${targetAppId}/support/${user.uid}/messages`);
-            onValue(chatRef, (s) => {
-                setChatMessages(s.val() || {});
-                if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-            });
-        }
+        const fetchNotifs = async () => {
+            try {
+                const [pubSnap, pvtSnap] = await Promise.all([get(pubNotifRef), get(pvtNotifRef)]);
+                const pubs = pubSnap.val() || {};
+                const pvts = pvtSnap.val() || {};
+                const combined = [];
+                Object.keys(pubs).forEach(id => combined.push({...pubs[id], id, scope: 'public'}));
+                Object.keys(pvts).forEach(id => combined.push({...pvts[id], id, scope: 'private'}));
+                combined.sort((a,b) => b.timestamp - a.timestamp);
+                
+                setNotifications(combined);
+                const hasNew = combined.some(n => n.timestamp > lastChecked);
+                setHasNewNotif(hasNew);
+            } catch (err) { console.error(err); }
+        };
+
+        const unsubPubNotif = onValue(pubNotifRef, fetchNotifs);
+        const unsubPvtNotif = onValue(pvtNotifRef, fetchNotifs);
+
+        // Chat (Realtime Database)
+        const chatRef = ref(db, `artifacts/${appId}/support/${user.uid}/messages`);
+        const unsubChat = onValue(chatRef, (snap) => {
+            const msgs = snap.val() || {};
+            const msgArray = Object.keys(msgs).map(k => msgs[k]);
+            setChatMessages(msgArray);
+            if(chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+        });
+
+        return () => {
+            unsubStats(); unsubPubNotif(); unsubPvtNotif(); unsubChat();
+        };
     }, [user]);
 
-    // View Switching
-    const changeView = (view) => {
-        if (view === 'spin-view' && !requireAuth()) return;
-        if (view === 'notification-view' && !requireAuth()) return;
-        if (view === 'support-view' && !requireAuth()) return;
+    // Load Tasks (Realtime Database)
+    useEffect(() => {
+        const tasksRef = ref(db, `artifacts/${appId}/public/data/microtasks`);
+        const subsRef = ref(db, `artifacts/${appId}/public/data/submissions`);
 
-        setCurrentView(view);
-        localStorage.setItem('last_view', view);
-        
-        if (view === 'spin-view') {
-            setTimeout(drawWheel, 100);
-        }
+        const handleTasks = async () => {
+            try {
+                const [taskSnap, subSnap] = await Promise.all([get(tasksRef), get(subsRef)]);
+                const tks = taskSnap.val() || {};
+                const sbs = subSnap.val() || {};
+                
+                const loadedTasks = [];
+                Object.keys(tks).reverse().forEach(id => {
+                    const item = tks[id];
+                    if (user && item.creatorId === user.uid) return;
+                    
+                    let mySubStatus = null;
+                    if (user && sbs[id]) {
+                        Object.keys(sbs[id]).forEach(sId => {
+                            if (sbs[id][sId].userId === user.uid) mySubStatus = sbs[id][sId].status;
+                        });
+                    }
+                    
+                    if (mySubStatus === 'approved' || mySubStatus === 'rejected') return;
+                    loadedTasks.push({ ...item, id, isPending: mySubStatus === 'pending' });
+                });
+                setTasks(loadedTasks);
+            } catch (error) { console.error(error); }
+        };
+
+        const unsubTasks = onValue(tasksRef, handleTasks);
+        const unsubSubs = onValue(subsRef, handleTasks);
+
+        return () => { unsubTasks(); unsubSubs(); };
+    }, [user]);
+
+    const loadSystemNotice = () => {
+        const noticeRef = ref(db, `artifacts/${appId}/public/settings/notice`);
+        onValue(noticeRef, (s) => {
+            setSystemNotice(s.val() || "");
+        });
     };
 
     const openNotifications = () => {
-        if(!requireAuth()) return;
-        localStorage.setItem('last_notif_check', Date.now());
+        if (!requireAuth()) return;
+        localStorage.setItem('last_notif_check', Date.now().toString());
         setHasNewNotif(false);
-        changeView('notification-view');
+        handleSetView('notification-view');
     };
 
-    // APIs & Actions
+    const openTaskDetails = (task) => {
+        if (!requireAuth()) return;
+        setSelectedTask(task);
+        handleSetView('detail-view');
+    };
+
+    const submitProof = async () => {
+        if (!requireAuth()) return;
+        if (!proofInput.trim()) return showToast("Proof required!");
+        
+        try {
+            const subRef = ref(db, `artifacts/${appId}/public/data/submissions/${selectedTask.id}/${Date.now()}`);
+            await set(subRef, {
+                userId: user.uid,
+                proof: proofInput.trim(),
+                status: 'pending',
+                timestamp: serverTimestamp()
+            });
+            setProofInput("");
+            showToast("Submitted!");
+            handleSetView('list-view');
+        } catch (err) { showToast("Error submitting proof"); }
+    };
+
     const claimDailyBonus = async () => {
-        if(!requireAuth()) return;
+        if (!requireAuth()) return;
         try {
             const token = await user.getIdToken();
             const response = await fetch('https://taskbajar-backend.vercel.app/api/daily-bonus', {
@@ -227,24 +294,68 @@ export default function App() {
             const data = await response.json();
             if (!response.ok) return showToast(data.error || "Something went wrong!");
             showToast(data.message);
-        } catch (error) {
-            showToast("Network Error!");
-        }
+        } catch (error) { showToast("Network Error!"); }
+    };
+
+    const sendChatMessage = async () => {
+        if (!requireAuth()) return;
+        if (!chatInput.trim()) return;
+        
+        try {
+            const msgRef = ref(db, `artifacts/${appId}/support/${user.uid}/messages/${Date.now()}`);
+            await set(msgRef, { text: chatInput.trim(), role: 'user', timestamp: serverTimestamp() });
+            
+            const listRef = ref(db, `artifacts/${appId}/support_list/${user.uid}`);
+            await set(listRef, { lastMsg: chatInput.trim(), name: userData.name, timestamp: serverTimestamp() });
+            
+            setChatInput("");
+        } catch (err) { showToast("Error sending message"); }
+    };
+
+    const drawWheel = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = canvas.width / 2;
+        const sliceAngle = (2 * Math.PI) / prizes.length;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        prizes.forEach((prize, i) => {
+            const angle = i * sliceAngle;
+            ctx.beginPath();
+            ctx.fillStyle = prize.color;
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, angle, angle + sliceAngle);
+            ctx.fill();
+            
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(angle + sliceAngle / 2);
+            ctx.textAlign = "right";
+            ctx.fillStyle = "white";
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillText(prize.label, radius - 20, 5);
+            ctx.restore();
+        });
     };
 
     const enhancedSpinWheel = async () => {
-        if(!requireAuth() || isSpinning) return;
+        if (!requireAuth() || isSpinning) return;
         if (userData.points < 5) return showToast("Low points! Need at least 5 points.");
 
         setIsSpinning(true);
+
         try {
             const token = await user.getIdToken();
             const response = await fetch('https://taskbajar-backend.vercel.app/api/spin', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
-            const data = await response.json();
 
+            const data = await response.json();
             if (!response.ok) {
                 showToast(data.error || "Server Error!");
                 setIsSpinning(false);
@@ -253,20 +364,24 @@ export default function App() {
 
             const sliceSize = 360 / prizes.length;
             const targetRotation = 270 - (data.prizeIndex * sliceSize) - (sliceSize / 2);
-            const totalSpin = (360 * 5) + targetRotation;
+            const randomSpins = 360 * 5; 
+            const totalSpin = randomSpins + targetRotation;
 
-            if(wheelRef.current) {
-                wheelRef.current.style.transition = 'transform 4s cubic-bezier(0.1, 0, 0, 1)';
+            if (wheelRef.current) {
                 wheelRef.current.style.transform = `rotate(${totalSpin}deg)`;
             }
 
             setTimeout(() => {
                 showToast(data.winAmount > 0 ? `Won ${data.winAmount} Points!` : "Try again.");
                 setIsSpinning(false);
-                if(wheelRef.current) {
+                
+                if (wheelRef.current) {
                     const netRotation = totalSpin % 360;
                     wheelRef.current.style.transition = 'none';
                     wheelRef.current.style.transform = `rotate(${netRotation}deg)`;
+                    setTimeout(() => { 
+                        if (wheelRef.current) wheelRef.current.style.transition = 'transform 4s cubic-bezier(0.1, 0, 0, 1)'; 
+                    }, 50);
                 }
             }, 4000);
 
@@ -276,363 +391,336 @@ export default function App() {
         }
     };
 
-    const submitProof = async () => {
-        if(!requireAuth()) return;
-        if(!proofText.trim()) return showToast("Proof required!");
-        
-        const subRef = ref(db, `artifacts/${targetAppId}/public/data/submissions/${selectedTask.id}/${Date.now()}`);
-        await set(subRef, {
-            userId: user.uid, proof: proofText, status: 'pending', timestamp: serverTimestamp()
-        });
-        
-        setProofText("");
-        showToast("Submitted!");
-        changeView('list-view');
-    };
-
-    const sendChatMessage = async () => {
-        if(!requireAuth() || !chatInput.trim()) return;
-        
-        const msgRef = ref(db, `artifacts/${targetAppId}/support/${user.uid}/messages/${Date.now()}`);
-        await set(msgRef, { text: chatInput, role: 'user', timestamp: serverTimestamp() });
-        
-        const listRef = ref(db, `artifacts/${targetAppId}/support_list/${user.uid}`);
-        await set(listRef, { lastMsg: chatInput, name: userData.name, timestamp: serverTimestamp() });
-        
-        setChatInput("");
-    };
-
-    // Canvas Logic
-    const drawWheel = () => {
-        const canvas = document.getElementById('wheel-canvas'); 
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d'); 
-        const centerX = canvas.width / 2; 
-        const centerY = canvas.height / 2;
-        const radius = canvas.width / 2; 
-        const sliceAngle = (2 * Math.PI) / prizes.length;
-        
-        prizes.forEach((prize, i) => {
-            const angle = i * sliceAngle; 
-            ctx.beginPath(); 
-            ctx.fillStyle = prize.color;
-            ctx.moveTo(centerX, centerY); 
-            ctx.arc(centerX, centerY, radius, angle, angle + sliceAngle); 
-            ctx.fill();
-            
-            ctx.save(); 
-            ctx.translate(centerX, centerY); 
-            ctx.rotate(angle + sliceAngle / 2); 
-            ctx.textAlign = "right"; 
-            ctx.fillStyle = "white"; 
-            ctx.font = "bold 16px sans-serif"; 
-            ctx.fillText(prize.label, radius - 20, 5); 
-            ctx.restore();
-        });
-    };
-
     return (
-        <div className="min-h-screen bg-[#f8fafc] text-[#0f172a] font-['Plus_Jakarta_Sans',sans-serif] pb-[90px] overflow-x-hidden">
-            
-            {/* Toast Notification */}
-            {toastMsg && (
-                <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-[#1e293b] text-white px-5 py-2.5 rounded-full text-xs font-semibold z-[3000] shadow-[0_8px_15px_rgba(0,0,0,0.15)] animate-bounce">
-                    {toastMsg}
-                </div>
-            )}
-
-            {/* Auth Popup Overlay */}
-            {showAuthPopup && (
-                <div className="fixed inset-0 bg-[#0f172a]/60 backdrop-blur-sm z-[9999] flex items-center justify-center">
-                    <div className="bg-white w-[90%] max-w-[360px] text-center p-8 rounded-[22px] shadow-2xl animate-[viewIn_0.3s_ease-out]">
-                        <div className="text-5xl mb-3">👋</div>
-                        <h3 className="font-extrabold text-xl text-[#0f172a] mb-2">অ্যাকাউন্ট প্রয়োজন!</h3>
-                        <p className="text-sm text-[#64748b] mb-6">সকল ফিচার ব্যবহার করতে এবং আয় শুরু করতে দয়া করে লগইন বা সাইন আপ করুন।</p>
-                        <button 
-                            className="w-full p-3.5 rounded-2xl bg-gradient-to-br from-[#6366f1] to-[#a855f7] text-white font-bold shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:scale-[0.98] transition-transform"
-                            onClick={() => window.location.href='#'} // Normally 'login.html'
-                        >
-                            লগইন / সাইন আপ
-                        </button>
-                        <button 
-                            className="w-full p-3.5 rounded-2xl bg-[#f1f5f9] text-[#64748b] font-bold mt-3 hover:bg-[#e2e8f0] transition-colors"
-                            onClick={handleHideAuthPopup}
-                        >
-                            পরে করব
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Header */}
-            <div className="bg-gradient-to-br from-[#6366f1] to-[#a855f7] text-white pt-3 pb-6 px-4 rounded-b-[25px] sticky top-0 z-[100] shadow-[0_5px_15px_rgba(99,102,241,0.15)]">
-                <div className="flex justify-between items-center max-w-[500px] mx-auto gap-2">
-                    
-                    {/* Profile Area */}
-                    {!isGuestMode ? (
-                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => requireAuth()}>
-                            <div className="w-9 h-9 rounded-xl bg-white/20 border-2 border-white/40 backdrop-blur-md overflow-hidden flex justify-center items-center shrink-0">
-                                <img src={userData.avatar || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} alt="Avatar" className="w-full h-full object-cover" />
-                            </div>
-                            <div>
-                                <h2 className="text-xs font-extrabold">{userData.name}</h2>
-                                <span className="text-[10px] font-extrabold bg-white/20 px-1.5 py-0.5 rounded-md">PRO</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <button 
-                            onClick={() => setShowAuthPopup(true)}
-                            className="bg-white text-[#6366f1] border-none py-2 px-4 rounded-xl font-extrabold text-xs shadow-md transition-transform hover:scale-105"
-                        >
-                            Login
-                        </button>
-                    )}
-
-                    {/* Right Header Actions */}
-                    <div className="flex items-center gap-2">
-                        <div className="relative bg-white/20 w-9 h-9 rounded-xl flex justify-center items-center text-lg cursor-pointer" onClick={openNotifications}>
-                            🔔
-                            {hasNewNotif && <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#f43f5e] rounded-full border-2 border-white"></div>}
-                        </div>
-                        <div className="flex bg-black/10 p-1 rounded-xl border border-white/15">
-                            <button className={`px-2 py-1 text-[10px] font-extrabold rounded-lg transition-all ${lang === 'bn' ? 'bg-white text-[#6366f1] shadow-sm' : 'text-white/60'}`} onClick={() => {setLang('bn'); localStorage.setItem('elite_lang', 'bn');}}>BN</button>
-                            <button className={`px-2 py-1 text-[10px] font-extrabold rounded-lg transition-all ${lang === 'en' ? 'bg-white text-[#6366f1] shadow-sm' : 'text-white/60'}`} onClick={() => {setLang('en'); localStorage.setItem('elite_lang', 'en');}}>EN</button>
-                        </div>
-                        <div className="bg-white/15 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/25 text-right shrink-0">
-                            <span className="text-[10px] uppercase font-extrabold opacity-80 block leading-none">{t.points}</span>
-                            <b className="block text-base font-extrabold leading-tight">{userData.points}</b>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Main Container */}
-            <div className="px-4 -mt-2 max-w-[480px] mx-auto">
+        <>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
                 
-                {/* 1. LIST VIEW (HOME) */}
-                {currentView === 'list-view' && (
-                    <div className="animate-[viewIn_0.4s_ease-out]">
-                        {/* Notice Board */}
-                        {notice && (
-                            <div className="bg-[#fff7ed] border border-[#ffedd5] p-2.5 rounded-2xl mt-5 text-[#9a3412] text-xs font-bold">
-                                <marquee>{notice}</marquee>
+                :root {
+                    --p-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                    --p-glow: 0 0 20px rgba(99, 102, 241, 0.4);
+                    --bg: #f8fafc;
+                    --glass: rgba(255, 255, 255, 0.85);
+                    --text-h: #0f172a;
+                    --text-p: #64748b;
+                    --accent: #10b981;
+                    --danger: #f43f5e;
+                    --warning: #f59e0b;
+                }
+
+                * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+                body { background: var(--bg); color: var(--text-h); line-height: 1.6; padding-bottom: 90px; overflow-x: hidden; }
+
+                .header {
+                    background: var(--p-gradient); color: white; padding: 12px 15px 25px;
+                    border-bottom-left-radius: 25px; border-bottom-right-radius: 25px;
+                    position: sticky; top: 0; z-index: 100; box-shadow: 0 5px 15px rgba(99, 102, 241, 0.15);
+                }
+                .header-content { display: flex; justify-content: space-between; align-items: center; max-width: 500px; margin: 0 auto; gap: 8px; }
+
+                .avatar-frame {
+                    width: 36px; height: 36px; border-radius: 12px;
+                    background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.4);
+                    backdrop-filter: blur(10px); overflow: hidden; display: flex; justify-content: center; align-items: center; flex-shrink: 0; cursor: pointer;
+                }
+                .avatar-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+                .header-lang-switch {
+                    display: flex; background: rgba(0,0,0,0.1); padding: 3px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
+                }
+                .h-lang-btn {
+                    padding: 4px 8px; font-size: 0.55rem; font-weight: 800; border-radius: 8px; cursor: pointer; transition: 0.3s; color: rgba(255,255,255,0.6);
+                }
+                .h-lang-btn.active { background: white; color: #6366f1; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+                .wallet-pill {
+                    background: rgba(255,255,255,0.15); backdrop-filter: blur(15px); padding: 5px 10px;
+                    border-radius: 14px; border: 1px solid rgba(255,255,255,0.25); text-align: right; flex-shrink: 0;
+                }
+                .wallet-pill span { font-size: 0.45rem; text-transform: uppercase; font-weight: 800; opacity: 0.8; display: block; line-height: 1; }
+                .wallet-pill b { display: block; font-size: 0.95rem; font-weight: 800; line-height: 1.2; }
+
+                .notif-btn { position: relative; background: rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 1.1rem; cursor: pointer; }
+                .notif-badge { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; background: var(--danger); border-radius: 50%; border: 2px solid white; }
+
+                .container { padding: 0 18px; margin-top: -8px; max-width: 480px; margin-left: auto; margin-right: auto; }
+                .view { animation: viewIn 0.4s ease-out; }
+                @keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+                .elite-card {
+                    background: var(--glass); backdrop-filter: blur(20px); border-radius: 22px; padding: 18px;
+                    margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.7);
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.02); transition: 0.3s;
+                }
+                .section-h { font-size: 1rem; font-weight: 800; margin: 15px 0 10px 5px; color: #1e293b; }
+
+                .btn-elite {
+                    width: 100%; padding: 14px; border: none; border-radius: 16px;
+                    background: var(--p-gradient); color: white; font-size: 0.9rem; font-weight: 700;
+                    cursor: pointer; transition: 0.3s; box-shadow: var(--p-glow);
+                    display: flex; align-items: center; justify-content: center; gap: 8px;
+                }
+                .btn-elite:active { transform: scale(0.97); }
+                .btn-elite:disabled { opacity: 0.7; cursor: not-allowed; transform: none; box-shadow: none; }
+                .btn-ghost { background: #f1f5f9; color: var(--text-p); box-shadow: none; margin-top: 10px; }
+
+                .nav-bar-container {
+                    position: fixed; bottom: 15px; left: 15px; right: 15px;
+                    z-index: 1000; display: flex; flex-direction: column; gap: 10px;
+                }
+                .expanded-menu {
+                    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px);
+                    border-radius: 20px; padding: 12px; display: flex; gap: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 1px solid #fff;
+                    opacity: 0; transform: translateY(20px); pointer-events: none;
+                    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                }
+                .nav-bar-container.open .expanded-menu { opacity: 1; transform: translateY(0); pointer-events: auto; }
+                
+                .nav-bar {
+                    height: 65px; background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
+                    border-radius: 20px; display: flex; align-items: center; justify-content: space-around;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #fff;
+                }
+                .nav-item { display: flex; flex-direction: column; align-items: center; color: #94a3b8; cursor: pointer; text-decoration: none; transition: 0.3s; }
+                .nav-item.active { color: #6366f1; transform: translateY(-2px); }
+                .nav-item i { font-size: 1.2rem; margin-bottom: 1px; font-style: normal; }
+                .nav-item span { font-size: 0.5rem; font-weight: 700; white-space: nowrap; }
+
+                .input-group { margin-bottom: 14px; }
+                .input-group label { display: block; font-size: 0.7rem; font-weight: 800; color: var(--text-p); margin-bottom: 5px; margin-left: 5px; }
+                .input-group input, .input-group select, .input-group textarea {
+                    width: 100%; padding: 12px 18px; background: #f8fafc; border: 1px solid #e2e8f0;
+                    border-radius: 15px; outline: none; transition: 0.3s; font-size: 0.9rem;
+                }
+
+                #toast {
+                    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+                    background: #1e293b; color: white; padding: 10px 20px; border-radius: 50px;
+                    font-size: 0.75rem; font-weight: 600; z-index: 3000; box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+                    transition: opacity 0.3s ease;
+                }
+
+                .chat-container { height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 5px; }
+                .bubble { padding: 10px 14px; border-radius: 15px; font-size: 0.8rem; max-width: 80%; font-weight: 500; }
+                .bubble-me { background: var(--p-gradient); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+                .bubble-admin { background: #f1f5f9; color: var(--text-h); align-self: flex-start; border-bottom-left-radius: 4px; }
+
+                .notif-card { background: white; padding: 15px; border-radius: 18px; margin-bottom: 12px; border-left: 5px solid #6366f1; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+                .notif-card h4 { font-size: 0.85rem; font-weight: 800; color: #1e293b; }
+                .notif-card p { font-size: 0.75rem; color: #64748b; margin-top: 5px; }
+                .notif-card small { font-size: 0.6rem; color: #94a3b8; display: block; margin-top: 8px; font-weight: 700; }
+                
+                .pending-task { opacity: 0.7; cursor: default; }
+            `}</style>
+
+            {/* Toast */}
+            {toast.visible && <div id="toast">{toast.msg}</div>}
+
+            {/* Auth Popup */}
+            {showAuthPopup && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div className="elite-card" style={{ width: '90%', maxWidth: '360px', textAlign: 'center', animation: 'viewIn 0.3s ease-out', background: 'white', padding: '30px 20px' }}>
+                        <div style={{ fontSize: '3rem', marginBottom: '10px' }}>👋</div>
+                        <h3 style={{ fontWeight: 800, fontSize: '1.3rem', color: '#0f172a', marginBottom: '8px' }}>অ্যাকাউন্ট প্রয়োজন!</h3>
+                        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '25px' }}>সকল ফিচার ব্যবহার করতে এবং আয় শুরু করতে দয়া করে লগইন বা সাইন আপ করুন।</p>
+                        <button className="btn-elite" onClick={() => window.location.href = '/login'}>লগইন / সাইন আপ</button>
+                        <button className="btn-elite btn-ghost" onClick={handleHideAuthPopup}>পরে করব</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Main App Container */}
+            <div>
+                {/* Header */}
+                <div className="header">
+                    <div className="header-content">
+                        {user ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="avatar-frame" onClick={() => window.location.href='/profile'}>
+                                    <img src={userData.avatar} onError={(e) => {e.target.src="https://cdn-icons-png.flaticon.com/512/149/149071.png"}} alt="Avatar"/>
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '0.75rem', fontWeight: 800 }}>{userData.name}</h2>
+                                    <span style={{ fontSize: '0.45rem', fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '1px 4px', borderRadius: '6px' }}>PRO</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <button onClick={() => window.location.href='/login'} style={{ background: 'white', color: '#6366f1', border: 'none', padding: '8px 16px', borderRadius: '12px', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', transition: '0.3s' }}>Login</button>
                             </div>
                         )}
-                        
-                        {/* Top Action Grid */}
-                        <div className="grid grid-cols-3 gap-2.5 mt-4">
-                            <div onClick={() => changeView('spin-view')} className="bg-white/85 backdrop-blur-[20px] rounded-[22px] p-3 text-center cursor-pointer border border-white/70 shadow-sm hover:scale-[0.98] transition-transform">
-                                <div className="text-2xl mb-1">🎡</div>
-                                <p className="text-[10px] font-extrabold text-[#6366f1]">{t.spin}</p>
-                            </div>
-                            <div onClick={claimDailyBonus} className="bg-white/85 backdrop-blur-[20px] rounded-[22px] p-3 text-center cursor-pointer border border-white/70 shadow-sm hover:scale-[0.98] transition-transform">
-                                <div className="text-2xl mb-1">🎁</div>
-                                <p className="text-[10px] font-extrabold text-[#10b981]">{t.gift}</p>
-                            </div>
-                            <div className="bg-[#fffbeb] backdrop-blur-[20px] rounded-[22px] p-3 text-center cursor-pointer border-2 border-dashed border-[#f59e0b] shadow-sm hover:scale-[0.98] transition-transform">
-                                <div className="text-2xl mb-1">🎊</div>
-                                <p className="text-[10px] font-extrabold text-[#d97706]">{t.offers}</p>
-                            </div>
-                        </div>
 
-                        <h3 className="text-base font-extrabold mt-4 mb-2.5 ml-1 text-[#1e293b]">{t.missions}</h3>
-                        
-                        {/* Task List */}
-                        <div className="flex flex-col gap-3">
-                            {Object.keys(tasks).reverse().map(id => {
-                                const item = tasks[id];
-                                if (user && item.creatorId === user.uid) return null;
-                                
-                                let mySubStatus = null;
-                                if(user && submissions[id]) {
-                                    Object.keys(submissions[id]).forEach(sId => {
-                                        if(submissions[id][sId].userId === user.uid) mySubStatus = submissions[id][sId].status;
-                                    });
-                                }
-                                if (mySubStatus === 'approved' || mySubStatus === 'rejected') return null;
-                                
-                                const isPending = mySubStatus === 'pending';
-
-                                return (
-                                    <div key={id} onClick={() => !isPending && (setSelectedTask({...item, id}), changeView('detail-view'))} 
-                                         className={`bg-white/85 backdrop-blur-[20px] rounded-[22px] p-4 flex justify-between items-center border border-white/70 shadow-sm transition-transform ${!isPending ? 'cursor-pointer hover:scale-[0.98]' : 'opacity-70'}`}>
-                                        <div>
-                                            <h4 className="text-sm font-extrabold text-[#1e293b]">{item.title}</h4>
-                                            <p className="text-[#10b981] font-extrabold text-xs mt-0.5">+{item.reward} {t.points}</p>
-                                        </div>
-                                        <div className="bg-[#f1f5f9] w-8 h-8 rounded-xl flex items-center justify-center text-[#64748b]">
-                                            {isPending ? '🔒' : '→'}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="notif-btn" onClick={openNotifications}>
+                                🔔 {hasNewNotif && <div className="notif-badge"></div>}
+                            </div>
+                            <div className="header-lang-switch">
+                                <div className={`h-lang-btn ${currentLang === 'bn' ? 'active' : ''}`} onClick={() => changeLang('bn')}>BN</div>
+                                <div className={`h-lang-btn ${currentLang === 'en' ? 'active' : ''}`} onClick={() => changeLang('en')}>EN</div>
+                            </div>
+                            <div className="wallet-pill">
+                                <span>{t.points}</span>
+                                <b>{userData.points}</b>
+                            </div>
                         </div>
                     </div>
-                )}
+                </div>
 
-                {/* 2. NOTIFICATION VIEW */}
-                {currentView === 'notification-view' && (
-                    <div className="animate-[viewIn_0.4s_ease-out]">
-                        <h3 className="text-base font-extrabold mt-4 mb-2.5 ml-1 text-[#1e293b]">{t.notifTitle}</h3>
-                        <div className="mt-3 flex flex-col gap-3">
-                            {notifications.length === 0 ? (
-                                <p className="text-center p-5 text-sm text-[#64748b]">{t.noNotif}</p>
-                            ) : (
-                                notifications.map(n => {
-                                    const isPvt = n.scope === 'private';
-                                    return (
-                                        <div key={n.id} className={`bg-white p-4 rounded-2xl shadow-sm ${isPvt ? 'border-l-4 border-[#f59e0b] bg-[#fffbeb]' : 'border-l-4 border-[#6366f1]'}`}>
-                                            <div className="flex justify-between items-center">
-                                                <h4 className="text-sm font-extrabold text-[#1e293b]">{n.title}</h4>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-md font-extrabold border border-black/5 ${isPvt ? 'bg-[#fef3c7] text-[#92400e]' : 'bg-[#eef2ff] text-[#4338ca]'}`}>
-                                                    {isPvt ? 'PRIVATE' : 'PUBLIC'}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-[#64748b] mt-1.5">{n.message}</p>
-                                            <small className="text-[10px] text-[#94a3b8] block mt-2 font-bold">{new Date(n.timestamp).toLocaleString()}</small>
-                                        </div>
-                                    );
-                                })
+                {/* Content Container */}
+                <div className="container">
+                    
+                    {/* List View */}
+                    {view === 'list-view' && (
+                        <div className="view">
+                            {systemNotice && (
+                                <div style={{ background: '#fff7ed', border: '1px solid #ffedd5', padding: '10px', borderRadius: '15px', marginTop: '20px', color: '#9a3412', fontSize: '0.75rem', fontWeight: 700 }}>
+                                    <marquee>{systemNotice}</marquee>
+                                </div>
                             )}
-                        </div>
-                        <button onClick={() => changeView('list-view')} className="w-full mt-4 p-3.5 rounded-2xl bg-[#f1f5f9] text-[#64748b] font-bold">{t.backBtn}</button>
-                    </div>
-                )}
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '15px' }}>
+                                <div className="elite-card" style={{ padding: '12px 5px', textAlign: 'center', cursor: 'pointer', marginBottom: 0 }} onClick={() => handleSetView('spin-view')}>
+                                    <div style={{ fontSize: '1.5rem', marginBottom: '3px' }}>🎡</div>
+                                    <p style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6366f1' }}>{t.spin}</p>
+                                </div>
+                                <div className="elite-card" style={{ padding: '12px 5px', textAlign: 'center', cursor: 'pointer', marginBottom: 0 }} onClick={claimDailyBonus}>
+                                    <div style={{ fontSize: '1.5rem', marginBottom: '3px' }}>🎁</div>
+                                    <p style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10b981' }}>{t.gift}</p>
+                                </div>
+                                <div className="elite-card" style={{ padding: '12px 5px', textAlign: 'center', cursor: 'pointer', marginBottom: 0, border: '1.5px dashed #f59e0b', background: '#fffbeb' }} onClick={() => window.location.href='/specialoffers'}>
+                                    <div style={{ fontSize: '1.5rem', marginBottom: '3px' }}>🎊</div>
+                                    <p style={{ fontSize: '0.65rem', fontWeight: 800, color: '#d97706' }}>{t.offers}</p>
+                                </div>
+                            </div>
 
-                {/* 3. SUPPORT VIEW */}
-                {currentView === 'support-view' && (
-                    <div className="animate-[viewIn_0.4s_ease-out]">
-                        <h3 className="text-base font-extrabold mt-4 mb-2.5 ml-1 text-[#1e293b]">{t.support}</h3>
-                        <div className="bg-white/85 backdrop-blur-[20px] rounded-[22px] p-4 border border-white/70 shadow-sm">
-                            <div ref={chatBoxRef} className="h-[280px] overflow-y-auto flex flex-col gap-2 p-1 mb-4">
-                                {Object.values(chatMessages).map((m, i) => (
-                                    <div key={i} className={`px-3.5 py-2.5 rounded-2xl text-xs max-w-[80%] font-medium ${m.role === 'admin' ? 'bg-[#f1f5f9] text-[#0f172a] self-start rounded-bl-sm' : 'bg-gradient-to-br from-[#6366f1] to-[#a855f7] text-white self-end rounded-br-sm'}`}>
-                                        {m.text}
+                            <h3 className="section-h">{t.missions}</h3>
+                            <div>
+                                {tasks.map(task => (
+                                    <div key={task.id} className={`elite-card ${task.isPending ? 'pending-task' : ''}`} onClick={() => !task.isPending && openTaskDetails(task)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <h4 style={{ fontSize: '0.85rem', fontWeight: 800 }}>{task.title}</h4>
+                                            <p style={{ color: '#10b981', fontWeight: 800, fontSize: '0.75rem' }}>+{task.reward} {t.points}</p>
+                                        </div>
+                                        <div style={{ background: '#f1f5f9', width: '30px', height: '30px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {task.isPending ? '🔒' : '→'}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    value={chatInput}
-                                    onChange={(e) => setChatInput(e.target.value)}
-                                    placeholder="Message..." 
-                                    className="flex-1 px-4 py-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl outline-none text-sm focus:border-[#6366f1] transition-colors"
-                                />
-                                <button onClick={sendChatMessage} className="w-11 h-11 flex items-center justify-center rounded-xl bg-gradient-to-br from-[#6366f1] to-[#a855f7] text-white shadow-md active:scale-95 transition-transform">
-                                    ➤
-                                </button>
-                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* 4. DETAIL VIEW */}
-                {currentView === 'detail-view' && selectedTask && (
-                    <div className="animate-[viewIn_0.4s_ease-out] mt-6">
-                        <div className="bg-white/85 backdrop-blur-[20px] rounded-[22px] p-5 border border-white/70 shadow-sm">
-                            <h3 className="font-extrabold mb-2 text-base">{selectedTask.title}</h3>
-                            <span className="bg-[#f0fdf4] text-[#10b981] font-extrabold px-2.5 py-1 rounded-lg text-[11px] inline-block mb-4">
-                                {t.missionReward} {selectedTask.reward}
-                            </span>
-                            <p className="text-xs text-[#64748b] mb-4">নির্দেশনা অনুসরণ করে মিশনটি সম্পন্ন করুন।</p>
-                            <a href={selectedTask.link} target="_blank" rel="noreferrer" className="block text-center bg-[#f1f5f9] text-[#6366f1] font-bold p-3.5 rounded-xl mb-4 hover:bg-[#e2e8f0] transition-colors">
-                                {t.performTask}
-                            </a>
-                            
-                            <div className="mt-5 pt-5 border-t border-[#f1f5f9]">
-                                <div className="mb-3">
-                                    <label className="block text-[11px] font-extrabold text-[#64748b] mb-1.5 ml-1">{t.proofLabel}</label>
-                                    <textarea 
-                                        rows="2" 
-                                        value={proofText}
-                                        onChange={(e) => setProofText(e.target.value)}
-                                        placeholder="প্রমাণ হিসেবে আপনার ইউজারনেম বা আইডি দিন"
-                                        className="w-full px-4 py-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl outline-none text-sm focus:border-[#6366f1] transition-colors"
-                                    ></textarea>
-                                </div>
-                                <button onClick={submitProof} className="w-full p-3.5 rounded-xl bg-gradient-to-br from-[#6366f1] to-[#a855f7] text-white font-bold shadow-[0_0_20px_rgba(99,102,241,0.4)] active:scale-95 transition-transform">
-                                    {t.submitBtn}
-                                </button>
-                                <button onClick={() => changeView('list-view')} className="w-full p-3.5 rounded-xl bg-[#f1f5f9] text-[#64748b] font-bold mt-2 hover:bg-[#e2e8f0]">
-                                    {t.cancelBtn}
-                                </button>
+                    {/* Notification View */}
+                    {view === 'notification-view' && (
+                        <div className="view">
+                            <h3 className="section-h">{t.notifTitle}</h3>
+                            <div style={{ marginTop: '10px' }}>
+                                {notifications.length > 0 ? notifications.map(n => (
+                                    <div key={n.id} className="notif-card" style={n.scope === 'private' ? { borderLeft: '5px solid #f59e0b', background: '#fffbeb' } : {}}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <h4 style={{ fontSize: '0.85rem', fontWeight: 800 }}>{n.title}</h4>
+                                            <span style={{ fontSize: '0.5rem', padding: '2px 6px', borderRadius: '5px', background: n.scope === 'private' ? '#fef3c7' : '#eef2ff', color: n.scope === 'private' ? '#92400e' : '#4338ca', fontWeight: 800, border: '1px solid rgba(0,0,0,0.05)' }}>
+                                                {n.scope === 'private' ? 'PRIVATE' : 'PUBLIC'}
+                                            </span>
+                                        </div>
+                                        <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '5px' }}>{n.message}</p>
+                                        <small style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block', marginTop: '8px' }}>{new Date(n.timestamp).toLocaleString()}</small>
+                                    </div>
+                                )) : <p style={{ textAlign: 'center', padding: '20px', fontSize: '0.8rem', color: 'var(--text-p)' }}>{t.noNotif}</p>}
                             </div>
+                            <button className="btn-elite btn-ghost" onClick={() => handleSetView('list-view')} style={{ marginTop: '15px' }}>{t.backBtn}</button>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* 5. SPIN VIEW */}
-                {currentView === 'spin-view' && (
-                    <div className="animate-[viewIn_0.4s_ease-out]">
-                        <h3 className="text-base font-extrabold mt-4 mb-2.5 ml-1 text-[#1e293b]">{t.spin}</h3>
-                        <div className="bg-white/85 backdrop-blur-[20px] rounded-[22px] p-6 text-center border border-white/70 shadow-sm relative">
-                            <div className="relative w-[260px] h-[260px] mx-auto mb-6 flex justify-center items-center">
-                                {/* Wheel Container */}
-                                <div ref={wheelRef} className="w-full h-full rounded-full border-[8px] border-[#f1f5f9] shadow-[0_10px_25px_rgba(0,0,0,0.1)] overflow-hidden transition-transform duration-[4000ms] ease-[cubic-bezier(0.1,0,0,1)]">
-                                    <canvas id="wheel-canvas" width="260" height="260" className="w-full h-full"></canvas>
+                    {/* Support View */}
+                    {view === 'support-view' && (
+                        <div className="view">
+                            <h3 className="section-h">Support Chat</h3>
+                            <div className="elite-card">
+                                <div className="chat-container" ref={chatBoxRef}>
+                                    {chatMessages.map((m, i) => (
+                                        <div key={i} className={`bubble ${m.role === 'admin' ? 'bubble-admin' : 'bubble-me'}`}>
+                                            {m.text}
+                                        </div>
+                                    ))}
                                 </div>
-                                {/* Pointer Indicator */}
-                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-r-[15px] border-l-transparent border-r-transparent border-t-[25px] border-t-[#6366f1] z-10"></div>
-                                {/* Center Circle */}
-                                <div className="absolute w-10 h-10 bg-white rounded-full shadow-[0_0_10px_rgba(0,0,0,0.2)] z-0 flex items-center justify-center font-extrabold text-[#6366f1] border-4 border-[#6366f1] text-[10px]">
-                                    WIN
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Message..." style={{ flex: 1, padding: '12px 15px', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.85rem' }} />
+                                    <button className="btn-elite" onClick={sendChatMessage} style={{ width: '45px', padding: 0, height: '45px' }}>➤</button>
                                 </div>
                             </div>
-                            
-                            <button 
-                                disabled={isSpinning}
-                                onClick={enhancedSpinWheel} 
-                                className={`w-full p-3.5 rounded-xl text-white font-bold shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-transform ${isSpinning ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-br from-[#6366f1] to-[#a855f7] active:scale-95'}`}
-                            >
-                                Spin for 5 Points
-                            </button>
-                            <button onClick={() => changeView('list-view')} className="w-full p-3.5 rounded-xl bg-[#f1f5f9] text-[#64748b] font-bold mt-2 hover:bg-[#e2e8f0]">
-                                {t.backBtn}
-                            </button>
+                        </div>
+                    )}
+
+                    {/* Detail View */}
+                    {view === 'detail-view' && selectedTask && (
+                        <div className="view">
+                            <div className="elite-card" style={{ marginTop: '30px' }}>
+                                <div>
+                                    <h3 style={{ fontWeight: 800, marginBottom: '8px', fontSize: '1rem' }}>{selectedTask.title}</h3>
+                                    <span style={{ background: '#f0fdf4', color: '#10b981', fontWeight: 800, padding: '4px 10px', borderRadius: '8px', fontSize: '0.7rem' }}>{t.missionReward} {selectedTask.reward}</span>
+                                    <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '15px 0' }}>নির্দেশনা অনুসরণ করে মিশনটি সম্পন্ন করুন।</p>
+                                    <a href={selectedTask.link} target="_blank" rel="noreferrer" className="btn-elite" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginBottom: '12px', background: '#f1f5f9', color: '#6366f1', boxShadow: 'none' }}>{t.performTask}</a>
+                                </div>
+                                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
+                                    <div className="input-group">
+                                        <label>{t.proofLabel}</label>
+                                        <textarea value={proofInput} onChange={(e) => setProofInput(e.target.value)} rows={2} placeholder="প্রমাণ হিসেবে আপনার ইউজারনেম বা আইডি দিন"></textarea>
+                                    </div>
+                                    <button className="btn-elite" onClick={submitProof}>{t.submitBtn}</button>
+                                    <button className="btn-elite btn-ghost" onClick={() => handleSetView('list-view')}>{t.cancelBtn}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Spin View */}
+                    {view === 'spin-view' && (
+                        <div className="view">
+                            <h3 className="section-h">{t.spin}</h3>
+                            <div className="elite-card" style={{ textAlign: 'center', padding: '30px 20px', position: 'relative' }}>
+                                <div style={{ position: 'relative', width: '260px', height: '260px', margin: '0 auto 30px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <div ref={wheelRef} style={{ width: '100%', height: '100%', borderRadius: '50%', border: '8px solid #f1f5f9', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', overflow: 'hidden', transition: 'transform 4s cubic-bezier(0.1, 0, 0, 1)' }}>
+                                        <canvas ref={canvasRef} width="260" height="260"></canvas>
+                                    </div>
+                                    <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '25px solid #6366f1', zIndex: 10 }}></div>
+                                    <div style={{ position: 'absolute', width: '40px', height: '40px', background: 'white', borderRadius: '50%', boxShadow: '0 0 10px rgba(0,0,0,0.2)', zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#6366f1', border: '3px solid #6366f1' }}>WIN</div>
+                                </div>
+                                <button className="btn-elite" onClick={enhancedSpinWheel} disabled={isSpinning}>Spin for 5 Points</button>
+                                <button className="btn-elite btn-ghost" onClick={() => handleSetView('list-view')}>{t.backBtn}</button>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+
+                {/* Footer NavBar */}
+                <div className={`nav-bar-container ${navOpen ? 'open' : ''}`}>
+                    <div className="expanded-menu">
+                        <a href="/leaderboard" className="nav-item">
+                            <i style={{ background: '#fdf2f8', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>🏆</i>
+                            <span style={{ fontSize: '0.6rem' }}>Leaderboard</span>
+                        </a>
+                        <div onClick={() => { handleSetView('support-view'); setNavOpen(false); }} className="nav-item">
+                            <i style={{ background: '#f1f5f9', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>🛠️</i>
+                            <span style={{ fontSize: '0.6rem' }}>Support</span>
                         </div>
                     </div>
-                )}
 
-            </div>
-
-            {/* Bottom Navigation Bar */}
-            <div className={`fixed bottom-4 left-4 right-4 z-[1000] flex flex-col gap-2 ${isMenuOpen ? 'open' : ''}`}>
-                
-                {/* Expanded Menu */}
-                <div className={`bg-white/95 backdrop-blur-[20px] rounded-[20px] p-3 flex gap-4 shadow-[0_10px_30px_rgba(0,0,0,0.1)] border border-white transition-all duration-300 ${isMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-5 pointer-events-none'}`}>
-                    <div onClick={() => console.log('leaderboard')} className="flex flex-col items-center text-[#94a3b8] cursor-pointer">
-                        <i className="bg-[#fdf2f8] w-9 h-9 rounded-xl flex items-center justify-center mb-1 not-italic">🏆</i>
-                        <span className="text-[10px]">Leaderboard</span>
-                    </div>
-                    <div onClick={() => changeView('support-view')} className="flex flex-col items-center text-[#94a3b8] cursor-pointer">
-                        <i className="bg-[#f1f5f9] w-9 h-9 rounded-xl flex items-center justify-center mb-1 not-italic">🛠️</i>
-                        <span className="text-[10px]">Support</span>
+                    <div className="nav-bar">
+                        <div className={`nav-item ${view === 'list-view' ? 'active' : ''}`} onClick={() => handleSetView('list-view')}><i>🏠</i><span>{t.navMissions}</span></div>
+                        <div className="nav-item" onClick={() => window.location.href='/order'}><i>🚀</i><span>{t.navPromote}</span></div>
+                        <div className="nav-item" onClick={() => window.location.href='/profile'}><i>👤</i><span>{t.navProfile}</span></div>
+                        <div className="nav-item" onClick={toggleMenu}>
+                            <i style={{ transition: '0.3s', fontStyle: 'normal', fontSize: '1.3rem', transform: navOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>+</i>
+                            <span>Menu</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Main Nav Bar */}
-                <div className="h-[65px] bg-white/95 backdrop-blur-[20px] rounded-[20px] flex items-center justify-around shadow-[0_10px_30px_rgba(0,0,0,0.08)] border border-white">
-                    <div onClick={() => changeView('list-view')} className={`flex flex-col items-center cursor-pointer transition-transform ${currentView === 'list-view' ? 'text-[#6366f1] -translate-y-0.5' : 'text-[#94a3b8]'}`}>
-                        <i className="text-xl mb-0.5 not-italic">🏠</i>
-                        <span className="text-[10px] font-bold">{t.navMissions}</span>
-                    </div>
-                    <div className="flex flex-col items-center cursor-pointer text-[#94a3b8] transition-transform">
-                        <i className="text-xl mb-0.5 not-italic">🚀</i>
-                        <span className="text-[10px] font-bold">{t.navPromote}</span>
-                    </div>
-                    <div className="flex flex-col items-center cursor-pointer text-[#94a3b8] transition-transform">
-                        <i className="text-xl mb-0.5 not-italic">👤</i>
-                        <span className="text-[10px] font-bold">{t.navProfile}</span>
-                    </div>
-                    <div onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex flex-col items-center cursor-pointer text-[#94a3b8] transition-transform">
-                        <i className={`text-[1.3rem] mb-0.5 not-italic transition-transform duration-300 ${isMenuOpen ? 'rotate-45 text-[#6366f1]' : ''}`}>+</i>
-                        <span className="text-[10px] font-bold">Menu</span>
-                    </div>
-                </div>
             </div>
-
-        </div>
+        </>
     );
 }
 
