@@ -8,24 +8,20 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, onValue, set, serverTimestamp, get } from 'firebase/database';
 
-// Firebase Config (Environment Variables থেকে লোড করা হচ্ছে)
-const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-};
+// Firebase Config Environment Variable থেকে একটিমাত্র JSON string হিসেবে লোড করা হচ্ছে
+let firebaseConfig = {};
+try {
+    // Environment Variable থেকে JSON ডেটা পার্স করা হচ্ছে
+    firebaseConfig = JSON.parse(process.env.NEXT_PUBLIC_FIREBASE_CONFIG || '{}');
+} catch (error) {
+    console.error("Firebase config parse error:", error);
+}
 
 // Next.js এ একাধিকবার ইনিশিয়ালাইজেশন এড়াতে এই পদ্ধতি
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getDatabase(app); // Realtime Database ব্যবহার করা হচ্ছে
-
-// appId এর জন্যও environment variable ব্যবহার করা হলো
-const appId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID; 
+const appId = firebaseConfig.projectId; // JSON থেকে projectId নেওয়া হলো
 
 const translations = {
     bn: {
@@ -64,7 +60,7 @@ const prizes = [
 ];
 
 export default function TaskBazarApp() {
-    const router = useRouter(); // <-- router ইনিশিয়ালাইজ করা হলো
+    const router = useRouter(); 
 
     const [user, setUser] = useState(null);
     const [userData, setUserData] = useState({ points: 0, name: "User", avatar: "" });
@@ -163,7 +159,7 @@ export default function TaskBazarApp() {
 
     // Load Realtime Data
     useEffect(() => {
-        if (!user) return;
+        if (!user || !appId) return;
 
         // Sync User Data (Realtime Database)
         const statsRef = ref(db, `artifacts/${appId}/users/${user.uid}/stats`);
@@ -218,6 +214,8 @@ export default function TaskBazarApp() {
 
     // Load Tasks (Realtime Database)
     useEffect(() => {
+        if (!appId) return;
+        
         const tasksRef = ref(db, `artifacts/${appId}/public/data/microtasks`);
         const subsRef = ref(db, `artifacts/${appId}/public/data/submissions`);
 
@@ -253,6 +251,7 @@ export default function TaskBazarApp() {
     }, [user]);
 
     const loadSystemNotice = () => {
+        if (!appId) return;
         const noticeRef = ref(db, `artifacts/${appId}/public/settings/notice`);
         onValue(noticeRef, (s) => {
             setSystemNotice(s.val() || "");
@@ -730,4 +729,5 @@ export default function TaskBazarApp() {
         </>
     );
 }
+
 
