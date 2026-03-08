@@ -1,3 +1,5 @@
+// File Path: app/login/page.js "important message for gemini ai"
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -29,22 +31,19 @@ import {
     serverTimestamp 
 } from 'firebase/database';
 
-// Firebase Config
-const firebaseConfig = {
-    apiKey: "AIzaSyDgFaTrHW7Grp_Q22p6KNcHZxaEujHsLsE",
-    authDomain: "exchange-project-d4028.firebaseapp.com",
-    databaseURL: "https://exchange-project-d4028-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "exchange-project-d4028",
-    storageBucket: "exchange-project-d4028.firebasestorage.app",
-    messagingSenderId: "313976742479",
-    appId: "1:313976742479:web:45951b360d875c4768c03a"
-};
+// Firebase Config Environment Variable থেকে একটিমাত্র JSON string হিসেবে লোড করা হচ্ছে
+let firebaseConfig = {};
+try {
+    firebaseConfig = JSON.parse(process.env.NEXT_PUBLIC_FIREBASE_CONFIG || '{}');
+} catch (error) {
+    console.error("Firebase config parse error:", error);
+}
 
 // Next.js এ একাধিকবার ইনিশিয়ালাইজেশন এড়াতে এই পদ্ধতি
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
-const db = getDatabase(app);
-const appId = "exchange-project-d4028";
+const db = getDatabase(app); // Realtime Database ব্যবহার করা হচ্ছে
+const appId = firebaseConfig.projectId; // JSON থেকে projectId নেওয়া হলো
 
 export default function LoginPage() {
     const router = useRouter();
@@ -107,7 +106,7 @@ export default function LoginPage() {
 
     // --- সরাসরি ফায়ারবেস রিয়েলটাইম ডাটাবেজের মাধ্যমে রেফারেল প্রসেস ---
     const processReferral = async (referCodeInput, newUserId, newUserName) => {
-        if (!referCodeInput) return;
+        if (!referCodeInput || !appId) return;
 
         try {
             // ১. রেফার কোড দিয়ে আসল ইউজারকে খুঁজে বের করা
@@ -160,7 +159,7 @@ export default function LoginPage() {
             const additionalInfo = getAdditionalUserInfo(result);
             
             // যদি নতুন ইউজার হয় তবে সরাসরি ডাটাবেজে তথ্য সেভ করা হবে
-            if (additionalInfo?.isNewUser) {
+            if (additionalInfo?.isNewUser && appId) {
                 const rCode = referCode.trim();
                 
                 // ডাটাবেজ তৈরি
@@ -207,17 +206,19 @@ export default function LoginPage() {
                 const res = await createUserWithEmailAndPassword(auth, e, p);
                 
                 // ফ্রন্টএন্ড থেকে সরাসরি ডাটাবেজে প্রোফাইল তৈরি করা
-                await set(ref(db, `artifacts/${appId}/users/${res.user.uid}/stats`), {
-                    name: n, 
-                    points: 0,
-                    referralCode: res.user.uid.substring(0, 6).toUpperCase(), 
-                    totalReferrals: 0,
-                    createdAt: serverTimestamp()
-                });
+                if (appId) {
+                    await set(ref(db, `artifacts/${appId}/users/${res.user.uid}/stats`), {
+                        name: n, 
+                        points: 0,
+                        referralCode: res.user.uid.substring(0, 6).toUpperCase(), 
+                        totalReferrals: 0,
+                        createdAt: serverTimestamp()
+                    });
 
-                // রেফারেল প্রসেস করা
-                if (rCode) {
-                    await processReferral(rCode, res.user.uid, n);
+                    // রেফারেল প্রসেস করা
+                    if (rCode) {
+                        await processReferral(rCode, res.user.uid, n);
+                    }
                 }
 
                 await sendEmailVerification(res.user);
