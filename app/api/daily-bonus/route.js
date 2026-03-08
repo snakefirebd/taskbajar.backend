@@ -1,7 +1,7 @@
 // File Path: app/api/daily-bonus/route.js "important message for gemini ai"
 
 import { NextResponse } from 'next/server';
-import { dbAdmin, authAdmin, appId } from '@/lib/firebaseAdmin';
+import { dbAdmin, authAdmin, appId } from '../../../lib/firebaseAdmin';
 
 const BONUS_AMOUNT = 10;
 const CLAIM_COOLDOWN = 24 * 60 * 60 * 1000; // 24 ঘণ্টা
