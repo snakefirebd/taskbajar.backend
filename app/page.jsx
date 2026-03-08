@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation'; // <-- useRouter ইম্পোর্ট করা হলো
+import { useRouter } from 'next/navigation';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, onValue, set, serverTimestamp, get } from 'firebase/database';
@@ -19,7 +19,6 @@ const firebaseConfig = {
     appId: "1:313976742479:web:45951b360d875c4768c03a"
 };
 
-// Next.js এ একাধিকবার ইনিশিয়ালাইজেশন এড়াতে এই পদ্ধতি
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getDatabase(app);
@@ -62,14 +61,14 @@ const prizes = [
 ];
 
 export default function TaskBazarApp() {
-    const router = useRouter(); // <-- router ইনিশিয়ালাইজ করা হলো
+    const router = useRouter();
 
     const [user, setUser] = useState(null);
     const [userData, setUserData] = useState({ points: 0, name: "User", avatar: "" });
     const [currentLang, setCurrentLang] = useState('bn');
     const [view, setView] = useState('list-view');
     const [navOpen, setNavOpen] = useState(false);
-    
+
     // State for Data
     const [systemNotice, setSystemNotice] = useState("");
     const [tasks, setTasks] = useState([]);
@@ -77,14 +76,14 @@ export default function TaskBazarApp() {
     const [hasNewNotif, setHasNewNotif] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     const [selectedTask, setSelectedTask] = useState(null);
-    
+
     // UI State
     const [toast, setToast] = useState({ msg: "", visible: false });
     const [showAuthPopup, setShowAuthPopup] = useState(false);
     const [chatInput, setChatInput] = useState("");
     const [proofInput, setProofInput] = useState("");
     const [isSpinning, setIsSpinning] = useState(false);
-    
+
     // Refs
     const wheelRef = useRef(null);
     const canvasRef = useRef(null);
@@ -128,7 +127,6 @@ export default function TaskBazarApp() {
         }
     };
 
-    // Require Auth Helper
     const requireAuth = () => {
         if (!user) {
             triggerAuthPopup();
@@ -163,7 +161,7 @@ export default function TaskBazarApp() {
     useEffect(() => {
         if (!user) return;
 
-        // Sync User Data (Realtime Database)
+        // Sync User Data
         const statsRef = ref(db, `artifacts/${appId}/users/${user.uid}/stats`);
         const unsubStats = onValue(statsRef, (snap) => {
             const data = snap.val() || {};
@@ -175,10 +173,10 @@ export default function TaskBazarApp() {
             localStorage.setItem('user_cache_data', JSON.stringify(data));
         });
 
-        // Notifications (Realtime Database)
+        // Notifications
         const pubNotifRef = ref(db, `artifacts/${appId}/public/notifications`);
         const pvtNotifRef = ref(db, `artifacts/${appId}/users/${user.uid}/notifications`);
-        
+
         const lastChecked = parseInt(localStorage.getItem('last_notif_check') || "0");
 
         const fetchNotifs = async () => {
@@ -190,7 +188,7 @@ export default function TaskBazarApp() {
                 Object.keys(pubs).forEach(id => combined.push({...pubs[id], id, scope: 'public'}));
                 Object.keys(pvts).forEach(id => combined.push({...pvts[id], id, scope: 'private'}));
                 combined.sort((a,b) => b.timestamp - a.timestamp);
-                
+
                 setNotifications(combined);
                 const hasNew = combined.some(n => n.timestamp > lastChecked);
                 setHasNewNotif(hasNew);
@@ -200,7 +198,7 @@ export default function TaskBazarApp() {
         const unsubPubNotif = onValue(pubNotifRef, fetchNotifs);
         const unsubPvtNotif = onValue(pvtNotifRef, fetchNotifs);
 
-        // Chat (Realtime Database)
+        // Chat
         const chatRef = ref(db, `artifacts/${appId}/support/${user.uid}/messages`);
         const unsubChat = onValue(chatRef, (snap) => {
             const msgs = snap.val() || {};
@@ -214,7 +212,7 @@ export default function TaskBazarApp() {
         };
     }, [user]);
 
-    // Load Tasks (Realtime Database)
+    // Load Tasks
     useEffect(() => {
         const tasksRef = ref(db, `artifacts/${appId}/public/data/microtasks`);
         const subsRef = ref(db, `artifacts/${appId}/public/data/submissions`);
@@ -224,19 +222,19 @@ export default function TaskBazarApp() {
                 const [taskSnap, subSnap] = await Promise.all([get(tasksRef), get(subsRef)]);
                 const tks = taskSnap.val() || {};
                 const sbs = subSnap.val() || {};
-                
+
                 const loadedTasks = [];
                 Object.keys(tks).reverse().forEach(id => {
                     const item = tks[id];
                     if (user && item.creatorId === user.uid) return;
-                    
+
                     let mySubStatus = null;
                     if (user && sbs[id]) {
                         Object.keys(sbs[id]).forEach(sId => {
                             if (sbs[id][sId].userId === user.uid) mySubStatus = sbs[id][sId].status;
                         });
                     }
-                    
+
                     if (mySubStatus === 'approved' || mySubStatus === 'rejected') return;
                     loadedTasks.push({ ...item, id, isPending: mySubStatus === 'pending' });
                 });
@@ -273,7 +271,7 @@ export default function TaskBazarApp() {
     const submitProof = async () => {
         if (!requireAuth()) return;
         if (!proofInput.trim()) return showToast("Proof required!");
-        
+
         try {
             const subRef = ref(db, `artifacts/${appId}/public/data/submissions/${selectedTask.id}/${Date.now()}`);
             await set(subRef, {
@@ -305,14 +303,14 @@ export default function TaskBazarApp() {
     const sendChatMessage = async () => {
         if (!requireAuth()) return;
         if (!chatInput.trim()) return;
-        
+
         try {
             const msgRef = ref(db, `artifacts/${appId}/support/${user.uid}/messages/${Date.now()}`);
             await set(msgRef, { text: chatInput.trim(), role: 'user', timestamp: serverTimestamp() });
-            
+
             const listRef = ref(db, `artifacts/${appId}/support_list/${user.uid}`);
             await set(listRef, { lastMsg: chatInput.trim(), name: userData.name, timestamp: serverTimestamp() });
-            
+
             setChatInput("");
         } catch (err) { showToast("Error sending message"); }
     };
@@ -325,9 +323,9 @@ export default function TaskBazarApp() {
         const centerY = canvas.height / 2;
         const radius = canvas.width / 2;
         const sliceAngle = (2 * Math.PI) / prizes.length;
-        
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         prizes.forEach((prize, i) => {
             const angle = i * sliceAngle;
             ctx.beginPath();
@@ -335,7 +333,7 @@ export default function TaskBazarApp() {
             ctx.moveTo(centerX, centerY);
             ctx.arc(centerX, centerY, radius, angle, angle + sliceAngle);
             ctx.fill();
-            
+
             ctx.save();
             ctx.translate(centerX, centerY);
             ctx.rotate(angle + sliceAngle / 2);
@@ -379,7 +377,7 @@ export default function TaskBazarApp() {
             setTimeout(() => {
                 showToast(data.winAmount > 0 ? `Won ${data.winAmount} Points!` : "Try again.");
                 setIsSpinning(false);
-                
+
                 if (wheelRef.current) {
                     const netRotation = totalSpin % 360;
                     wheelRef.current.style.transition = 'none';
@@ -397,335 +395,306 @@ export default function TaskBazarApp() {
     };
 
     return (
-        <>
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
-                
-                :root {
-                    --p-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-                    --p-glow: 0 0 20px rgba(99, 102, 241, 0.4);
-                    --bg: #f8fafc;
-                    --glass: rgba(255, 255, 255, 0.85);
-                    --text-h: #0f172a;
-                    --text-p: #64748b;
-                    --accent: #10b981;
-                    --danger: #f43f5e;
-                    --warning: #f59e0b;
-                }
-
-                * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
-                body { background: var(--bg); color: var(--text-h); line-height: 1.6; padding-bottom: 90px; overflow-x: hidden; }
-
-                .header {
-                    background: var(--p-gradient); color: white; padding: 12px 15px 25px;
-                    border-bottom-left-radius: 25px; border-bottom-right-radius: 25px;
-                    position: sticky; top: 0; z-index: 100; box-shadow: 0 5px 15px rgba(99, 102, 241, 0.15);
-                }
-                .header-content { display: flex; justify-content: space-between; align-items: center; max-width: 500px; margin: 0 auto; gap: 8px; }
-
-                .avatar-frame {
-                    width: 36px; height: 36px; border-radius: 12px;
-                    background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.4);
-                    backdrop-filter: blur(10px); overflow: hidden; display: flex; justify-content: center; align-items: center; flex-shrink: 0; cursor: pointer;
-                }
-                .avatar-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-                .header-lang-switch {
-                    display: flex; background: rgba(0,0,0,0.1); padding: 3px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15);
-                }
-                .h-lang-btn {
-                    padding: 4px 8px; font-size: 0.55rem; font-weight: 800; border-radius: 8px; cursor: pointer; transition: 0.3s; color: rgba(255,255,255,0.6);
-                }
-                .h-lang-btn.active { background: white; color: #6366f1; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-
-                .wallet-pill {
-                    background: rgba(255,255,255,0.15); backdrop-filter: blur(15px); padding: 5px 10px;
-                    border-radius: 14px; border: 1px solid rgba(255,255,255,0.25); text-align: right; flex-shrink: 0;
-                }
-                .wallet-pill span { font-size: 0.45rem; text-transform: uppercase; font-weight: 800; opacity: 0.8; display: block; line-height: 1; }
-                .wallet-pill b { display: block; font-size: 0.95rem; font-weight: 800; line-height: 1.2; }
-
-                .notif-btn { position: relative; background: rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 1.1rem; cursor: pointer; }
-                .notif-badge { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; background: var(--danger); border-radius: 50%; border: 2px solid white; }
-
-                .container { padding: 0 18px; margin-top: -8px; max-width: 480px; margin-left: auto; margin-right: auto; }
-                .view { animation: viewIn 0.4s ease-out; }
-                @keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-                .elite-card {
-                    background: var(--glass); backdrop-filter: blur(20px); border-radius: 22px; padding: 18px;
-                    margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.7);
-                    box-shadow: 0 8px 20px rgba(0,0,0,0.02); transition: 0.3s;
-                }
-                .section-h { font-size: 1rem; font-weight: 800; margin: 15px 0 10px 5px; color: #1e293b; }
-
-                .btn-elite {
-                    width: 100%; padding: 14px; border: none; border-radius: 16px;
-                    background: var(--p-gradient); color: white; font-size: 0.9rem; font-weight: 700;
-                    cursor: pointer; transition: 0.3s; box-shadow: var(--p-glow);
-                    display: flex; align-items: center; justify-content: center; gap: 8px;
-                }
-                .btn-elite:active { transform: scale(0.97); }
-                .btn-elite:disabled { opacity: 0.7; cursor: not-allowed; transform: none; box-shadow: none; }
-                .btn-ghost { background: #f1f5f9; color: var(--text-p); box-shadow: none; margin-top: 10px; }
-
-                .nav-bar-container {
-                    position: fixed; bottom: 15px; left: 15px; right: 15px;
-                    z-index: 1000; display: flex; flex-direction: column; gap: 10px;
-                }
-                .expanded-menu {
-                    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px);
-                    border-radius: 20px; padding: 12px; display: flex; gap: 15px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 1px solid #fff;
-                    opacity: 0; transform: translateY(20px); pointer-events: none;
-                    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                }
-                .nav-bar-container.open .expanded-menu { opacity: 1; transform: translateY(0); pointer-events: auto; }
-                
-                .nav-bar {
-                    height: 65px; background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
-                    border-radius: 20px; display: flex; align-items: center; justify-content: space-around;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #fff;
-                }
-                .nav-item { display: flex; flex-direction: column; align-items: center; color: #94a3b8; cursor: pointer; text-decoration: none; transition: 0.3s; }
-                .nav-item.active { color: #6366f1; transform: translateY(-2px); }
-                .nav-item i { font-size: 1.2rem; margin-bottom: 1px; font-style: normal; }
-                .nav-item span { font-size: 0.5rem; font-weight: 700; white-space: nowrap; }
-
-                .input-group { margin-bottom: 14px; }
-                .input-group label { display: block; font-size: 0.7rem; font-weight: 800; color: var(--text-p); margin-bottom: 5px; margin-left: 5px; }
-                .input-group input, .input-group select, .input-group textarea {
-                    width: 100%; padding: 12px 18px; background: #f8fafc; border: 1px solid #e2e8f0;
-                    border-radius: 15px; outline: none; transition: 0.3s; font-size: 0.9rem;
-                }
-
-                #toast {
-                    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-                    background: #1e293b; color: white; padding: 10px 20px; border-radius: 50px;
-                    font-size: 0.75rem; font-weight: 600; z-index: 3000; box-shadow: 0 8px 15px rgba(0,0,0,0.15);
-                    transition: opacity 0.3s ease;
-                }
-
-                .chat-container { height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 5px; }
-                .bubble { padding: 10px 14px; border-radius: 15px; font-size: 0.8rem; max-width: 80%; font-weight: 500; }
-                .bubble-me { background: var(--p-gradient); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
-                .bubble-admin { background: #f1f5f9; color: var(--text-h); align-self: flex-start; border-bottom-left-radius: 4px; }
-
-                .notif-card { background: white; padding: 15px; border-radius: 18px; margin-bottom: 12px; border-left: 5px solid #6366f1; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
-                .notif-card h4 { font-size: 0.85rem; font-weight: 800; color: #1e293b; }
-                .notif-card p { font-size: 0.75rem; color: #64748b; margin-top: 5px; }
-                .notif-card small { font-size: 0.6rem; color: #94a3b8; display: block; margin-top: 8px; font-weight: 700; }
-                
-                .pending-task { opacity: 0.7; cursor: default; }
-            `}</style>
-
+        <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans overflow-x-hidden relative">
+            
             {/* Toast */}
-            {toast.visible && <div id="toast">{toast.msg}</div>}
+            {toast.visible && (
+                <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-5 py-2.5 rounded-full text-xs font-semibold z-[3000] shadow-xl shadow-slate-900/20 transition-all animate-in fade-in slide-in-from-top-5">
+                    {toast.msg}
+                </div>
+            )}
 
             {/* Auth Popup */}
             {showAuthPopup && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="elite-card" style={{ width: '90%', maxWidth: '360px', textAlign: 'center', animation: 'viewIn 0.3s ease-out', background: 'white', padding: '30px 20px' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: '10px' }}>👋</div>
-                        <h3 style={{ fontWeight: 800, fontSize: '1.3rem', color: '#0f172a', marginBottom: '8px' }}>অ্যাকাউন্ট প্রয়োজন!</h3>
-                        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '25px' }}>সকল ফিচার ব্যবহার করতে এবং আয় শুরু করতে দয়া করে লগইন বা সাইন আপ করুন।</p>
-                        <button className="btn-elite" onClick={() => router.push('/login')}>লগইন / সাইন আপ</button>
-                        <button className="btn-elite btn-ghost" onClick={handleHideAuthPopup}>পরে করব</button>
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-[340px] text-center rounded-[2rem] p-8 shadow-2xl border border-white animate-in zoom-in-95 fade-in duration-300">
+                        <div className="text-5xl mb-4">👋</div>
+                        <h3 className="font-extrabold text-xl text-slate-900 mb-2">অ্যাকাউন্ট প্রয়োজন!</h3>
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">সকল ফিচার ব্যবহার করতে এবং আয় শুরু করতে দয়া করে লগইন বা সাইন আপ করুন।</p>
+                        <button className="w-full py-3.5 mb-3 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-bold shadow-lg shadow-indigo-500/30 hover:scale-[1.02] active:scale-95 transition-all" onClick={() => router.push('/login')}>
+                            লগইন / সাইন আপ
+                        </button>
+                        <button className="w-full py-3.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 active:scale-95 transition-all" onClick={handleHideAuthPopup}>
+                            পরে করব
+                        </button>
                     </div>
                 </div>
             )}
 
-            {/* Main App Container */}
-            <div>
-                {/* Header */}
-                <div className="header">
-                    <div className="header-content">
-                        {user ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div className="avatar-frame" onClick={() => router.push('/profile')}>
-                                    <img src={userData.avatar} onError={(e) => {e.target.src="https://cdn-icons-png.flaticon.com/512/149/149071.png"}} alt="Avatar"/>
-                                </div>
-                                <div>
-                                    <h2 style={{ fontSize: '0.75rem', fontWeight: 800 }}>{userData.name}</h2>
-                                    <span style={{ fontSize: '0.45rem', fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '1px 4px', borderRadius: '6px' }}>PRO</span>
-                                </div>
+            {/* Header */}
+            <div className="sticky top-0 z-50 bg-gradient-to-br from-indigo-600 to-purple-600 text-white px-4 pt-4 pb-6 rounded-b-[2rem] shadow-xl shadow-indigo-500/10">
+                <div className="flex justify-between items-center max-w-md mx-auto">
+                    {user ? (
+                        <div className="flex items-center gap-3">
+                            <div 
+                                className="w-11 h-11 rounded-[1rem] bg-white/20 border-2 border-white/30 backdrop-blur-md overflow-hidden flex items-center justify-center shrink-0 cursor-pointer shadow-inner" 
+                                onClick={() => router.push('/profile')}
+                            >
+                                <img src={userData.avatar} className="w-full h-full object-cover" onError={(e) => {e.target.src="https://cdn-icons-png.flaticon.com/512/149/149071.png"}} alt="Avatar"/>
                             </div>
-                        ) : (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                <button onClick={() => router.push('/login')} style={{ background: 'white', color: '#6366f1', border: 'none', padding: '8px 16px', borderRadius: '12px', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', transition: '0.3s' }}>Login</button>
+                            <div className="flex flex-col">
+                                <h2 className="text-sm font-extrabold tracking-tight">{userData.name}</h2>
+                                <span className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded-md w-max mt-0.5 tracking-wider">PRO MEMBER</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-center">
+                            <button onClick={() => router.push('/login')} className="bg-white text-indigo-600 border-none px-5 py-2 rounded-xl font-bold text-sm cursor-pointer shadow-lg shadow-black/10 hover:scale-105 active:scale-95 transition-all">
+                                Login
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-2.5">
+                        <button 
+                            className="relative bg-white/20 hover:bg-white/30 transition w-10 h-10 rounded-[1rem] flex justify-center items-center text-xl cursor-pointer shadow-inner" 
+                            onClick={openNotifications}
+                        >
+                            🔔 {hasNewNotif && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-indigo-600"></span>}
+                        </button>
+                        <div className="flex bg-black/10 p-1 rounded-xl border border-white/10 backdrop-blur-sm">
+                            <button className={`px-2 py-1 text-[10px] font-extrabold rounded-lg transition-all ${currentLang === 'bn' ? 'bg-white text-indigo-600 shadow-md' : 'text-white/70 hover:text-white'}`} onClick={() => changeLang('bn')}>BN</button>
+                            <button className={`px-2 py-1 text-[10px] font-extrabold rounded-lg transition-all ${currentLang === 'en' ? 'bg-white text-indigo-600 shadow-md' : 'text-white/70 hover:text-white'}`} onClick={() => changeLang('en')}>EN</button>
+                        </div>
+                        <div className="bg-white/15 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/20 text-right shrink-0 shadow-inner">
+                            <span className="text-[9px] uppercase font-bold text-white/80 block leading-none">{t.points}</span>
+                            <b className="block text-base font-extrabold leading-tight">{userData.points}</b>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content Container */}
+            <div className="max-w-md mx-auto px-4 -mt-3 relative z-10">
+
+                {/* List View */}
+                {view === 'list-view' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {systemNotice && (
+                            <div className="bg-orange-50 border border-orange-200 p-3 rounded-2xl shadow-sm text-orange-700 text-xs font-bold overflow-hidden">
+                                <marquee>{systemNotice}</marquee>
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div className="notif-btn" onClick={openNotifications}>
-                                🔔 {hasNewNotif && <div className="notif-badge"></div>}
+                        <div className="grid grid-cols-3 gap-3 mt-5">
+                            <div className="bg-white/90 backdrop-blur-xl border border-white rounded-[1.2rem] p-4 text-center cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all" onClick={() => handleSetView('spin-view')}>
+                                <div className="text-3xl mb-1.5 drop-shadow-sm">🎡</div>
+                                <p className="text-[11px] font-extrabold text-indigo-500">{t.spin}</p>
                             </div>
-                            <div className="header-lang-switch">
-                                <div className={`h-lang-btn ${currentLang === 'bn' ? 'active' : ''}`} onClick={() => changeLang('bn')}>BN</div>
-                                <div className={`h-lang-btn ${currentLang === 'en' ? 'active' : ''}`} onClick={() => changeLang('en')}>EN</div>
+                            <div className="bg-white/90 backdrop-blur-xl border border-white rounded-[1.2rem] p-4 text-center cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all" onClick={claimDailyBonus}>
+                                <div className="text-3xl mb-1.5 drop-shadow-sm">🎁</div>
+                                <p className="text-[11px] font-extrabold text-emerald-500">{t.gift}</p>
                             </div>
-                            <div className="wallet-pill">
-                                <span>{t.points}</span>
-                                <b>{userData.points}</b>
+                            <div className="bg-amber-50 border border-amber-200 border-dashed rounded-[1.2rem] p-4 text-center cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-1 transition-all" onClick={() => router.push('/specialoffers')}>
+                                <div className="text-3xl mb-1.5 drop-shadow-sm">🎊</div>
+                                <p className="text-[11px] font-extrabold text-amber-600">{t.offers}</p>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                {/* Content Container */}
-                <div className="container">
-                    
-                    {/* List View */}
-                    {view === 'list-view' && (
-                        <div className="view">
-                            {systemNotice && (
-                                <div style={{ background: '#fff7ed', border: '1px solid #ffedd5', padding: '10px', borderRadius: '15px', marginTop: '20px', color: '#9a3412', fontSize: '0.75rem', fontWeight: 700 }}>
-                                    <marquee>{systemNotice}</marquee>
+                        <h3 className="text-lg font-extrabold text-slate-800 mt-6 mb-3 px-1">{t.missions}</h3>
+                        <div className="flex flex-col gap-3">
+                            {tasks.map(task => (
+                                <div 
+                                    key={task.id} 
+                                    className={`bg-white rounded-[1.25rem] p-4 flex justify-between items-center shadow-sm border border-slate-100 transition-all ${task.isPending ? 'opacity-60 grayscale-[30%] cursor-not-allowed' : 'cursor-pointer hover:shadow-md hover:border-indigo-100'}`} 
+                                    onClick={() => !task.isPending && openTaskDetails(task)}
+                                >
+                                    <div>
+                                        <h4 className="text-[15px] font-extrabold text-slate-800 mb-1 leading-tight">{task.title}</h4>
+                                        <p className="text-emerald-500 font-bold text-xs inline-flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md">+{task.reward} {t.points}</p>
+                                    </div>
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${task.isPending ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-500 shadow-inner'}`}>
+                                        {task.isPending ? '🔒' : '→'}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Notification View */}
+                {view === 'notification-view' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4">
+                        <div className="flex items-center justify-between mb-4 px-1">
+                            <h3 className="text-lg font-extrabold text-slate-800">{t.notifTitle}</h3>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                            {notifications.length > 0 ? notifications.map(n => (
+                                <div key={n.id} className={`bg-white p-4 rounded-2xl shadow-sm border-l-[6px] ${n.scope === 'private' ? 'border-amber-400 bg-amber-50/30' : 'border-indigo-500'}`}>
+                                    <div className="flex justify-between items-start gap-2">
+                                        <h4 className="text-sm font-extrabold text-slate-800 leading-tight">{n.title}</h4>
+                                        <span className={`text-[9px] px-2 py-0.5 rounded-md font-extrabold border shrink-0 ${n.scope === 'private' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                                            {n.scope === 'private' ? 'PRIVATE' : 'PUBLIC'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2 leading-relaxed">{n.message}</p>
+                                    <small className="text-[10px] text-slate-400 block mt-3 font-semibold">{new Date(n.timestamp).toLocaleString()}</small>
+                                </div>
+                            )) : (
+                                <div className="bg-white rounded-2xl p-8 text-center border border-dashed border-slate-200">
+                                    <span className="text-4xl mb-2 block">📭</span>
+                                    <p className="text-sm font-semibold text-slate-400">{t.noNotif}</p>
                                 </div>
                             )}
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '15px' }}>
-                                <div className="elite-card" style={{ padding: '12px 5px', textAlign: 'center', cursor: 'pointer', marginBottom: 0 }} onClick={() => handleSetView('spin-view')}>
-                                    <div style={{ fontSize: '1.5rem', marginBottom: '3px' }}>🎡</div>
-                                    <p style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6366f1' }}>{t.spin}</p>
-                                </div>
-                                <div className="elite-card" style={{ padding: '12px 5px', textAlign: 'center', cursor: 'pointer', marginBottom: 0 }} onClick={claimDailyBonus}>
-                                    <div style={{ fontSize: '1.5rem', marginBottom: '3px' }}>🎁</div>
-                                    <p style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10b981' }}>{t.gift}</p>
-                                </div>
-                                <div className="elite-card" style={{ padding: '12px 5px', textAlign: 'center', cursor: 'pointer', marginBottom: 0, border: '1.5px dashed #f59e0b', background: '#fffbeb' }} onClick={() => router.push('/specialoffers')}>
-                                    <div style={{ fontSize: '1.5rem', marginBottom: '3px' }}>🎊</div>
-                                    <p style={{ fontSize: '0.65rem', fontWeight: 800, color: '#d97706' }}>{t.offers}</p>
-                                </div>
-                            </div>
+                        </div>
+                        <button className="w-full mt-5 py-3.5 rounded-xl bg-slate-200 text-slate-600 font-bold hover:bg-slate-300 transition-colors" onClick={() => handleSetView('list-view')}>
+                            {t.backBtn}
+                        </button>
+                    </div>
+                )}
 
-                            <h3 className="section-h">{t.missions}</h3>
-                            <div>
-                                {tasks.map(task => (
-                                    <div key={task.id} className={`elite-card ${task.isPending ? 'pending-task' : ''}`} onClick={() => !task.isPending && openTaskDetails(task)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <h4 style={{ fontSize: '0.85rem', fontWeight: 800 }}>{task.title}</h4>
-                                            <p style={{ color: '#10b981', fontWeight: 800, fontSize: '0.75rem' }}>+{task.reward} {t.points}</p>
-                                        </div>
-                                        <div style={{ background: '#f1f5f9', width: '30px', height: '30px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            {task.isPending ? '🔒' : '→'}
-                                        </div>
+                {/* Support View */}
+                {view === 'support-view' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4">
+                        <h3 className="text-lg font-extrabold text-slate-800 px-1 mb-3">Support Chat</h3>
+                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                            <div className="h-[320px] overflow-y-auto flex flex-col gap-3 p-2 custom-scrollbar" ref={chatBoxRef}>
+                                {chatMessages.map((m, i) => (
+                                    <div key={i} className={`px-4 py-2.5 rounded-[1.25rem] text-sm max-w-[80%] font-medium shadow-sm ${m.role === 'admin' ? 'bg-slate-100 text-slate-700 self-start rounded-bl-sm' : 'bg-gradient-to-br from-indigo-500 to-purple-500 text-white self-end rounded-br-sm'}`}>
+                                        {m.text}
                                     </div>
                                 ))}
+                                {chatMessages.length === 0 && <p className="text-center text-slate-400 text-xs mt-10">Send a message to start conversation</p>}
                             </div>
-                        </div>
-                    )}
-
-                    {/* Notification View */}
-                    {view === 'notification-view' && (
-                        <div className="view">
-                            <h3 className="section-h">{t.notifTitle}</h3>
-                            <div style={{ marginTop: '10px' }}>
-                                {notifications.length > 0 ? notifications.map(n => (
-                                    <div key={n.id} className="notif-card" style={n.scope === 'private' ? { borderLeft: '5px solid #f59e0b', background: '#fffbeb' } : {}}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <h4 style={{ fontSize: '0.85rem', fontWeight: 800 }}>{n.title}</h4>
-                                            <span style={{ fontSize: '0.5rem', padding: '2px 6px', borderRadius: '5px', background: n.scope === 'private' ? '#fef3c7' : '#eef2ff', color: n.scope === 'private' ? '#92400e' : '#4338ca', fontWeight: 800, border: '1px solid rgba(0,0,0,0.05)' }}>
-                                                {n.scope === 'private' ? 'PRIVATE' : 'PUBLIC'}
-                                            </span>
-                                        </div>
-                                        <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '5px' }}>{n.message}</p>
-                                        <small style={{ fontSize: '0.6rem', color: '#94a3b8', display: 'block', marginTop: '8px' }}>{new Date(n.timestamp).toLocaleString()}</small>
-                                    </div>
-                                )) : <p style={{ textAlign: 'center', padding: '20px', fontSize: '0.8rem', color: 'var(--text-p)' }}>{t.noNotif}</p>}
+                            <div className="flex gap-2 mt-4 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                                <input 
+                                    type="text" 
+                                    value={chatInput} 
+                                    onChange={(e) => setChatInput(e.target.value)} 
+                                    placeholder="Type your message..." 
+                                    className="flex-1 bg-transparent px-3 py-2 outline-none text-sm text-slate-700 placeholder-slate-400" 
+                                />
+                                <button 
+                                    className="bg-indigo-500 hover:bg-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                                    onClick={sendChatMessage}
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                                </button>
                             </div>
-                            <button className="btn-elite btn-ghost" onClick={() => handleSetView('list-view')} style={{ marginTop: '15px' }}>{t.backBtn}</button>
-                        </div>
-                    )}
-
-                    {/* Support View */}
-                    {view === 'support-view' && (
-                        <div className="view">
-                            <h3 className="section-h">Support Chat</h3>
-                            <div className="elite-card">
-                                <div className="chat-container" ref={chatBoxRef}>
-                                    {chatMessages.map((m, i) => (
-                                        <div key={i} className={`bubble ${m.role === 'admin' ? 'bubble-admin' : 'bubble-me'}`}>
-                                            {m.text}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Message..." style={{ flex: 1, padding: '12px 15px', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.85rem' }} />
-                                    <button className="btn-elite" onClick={sendChatMessage} style={{ width: '45px', padding: 0, height: '45px' }}>➤</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Detail View */}
-                    {view === 'detail-view' && selectedTask && (
-                        <div className="view">
-                            <div className="elite-card" style={{ marginTop: '30px' }}>
-                                <div>
-                                    <h3 style={{ fontWeight: 800, marginBottom: '8px', fontSize: '1rem' }}>{selectedTask.title}</h3>
-                                    <span style={{ background: '#f0fdf4', color: '#10b981', fontWeight: 800, padding: '4px 10px', borderRadius: '8px', fontSize: '0.7rem' }}>{t.missionReward} {selectedTask.reward}</span>
-                                    <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '15px 0' }}>নির্দেশনা অনুসরণ করে মিশনটি সম্পন্ন করুন।</p>
-                                    <a href={selectedTask.link} target="_blank" rel="noreferrer" className="btn-elite" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginBottom: '12px', background: '#f1f5f9', color: '#6366f1', boxShadow: 'none' }}>{t.performTask}</a>
-                                </div>
-                                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
-                                    <div className="input-group">
-                                        <label>{t.proofLabel}</label>
-                                        <textarea value={proofInput} onChange={(e) => setProofInput(e.target.value)} rows={2} placeholder="প্রমাণ হিসেবে আপনার ইউজারনেম বা আইডি দিন"></textarea>
-                                    </div>
-                                    <button className="btn-elite" onClick={submitProof}>{t.submitBtn}</button>
-                                    <button className="btn-elite btn-ghost" onClick={() => handleSetView('list-view')}>{t.cancelBtn}</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Spin View */}
-                    {view === 'spin-view' && (
-                        <div className="view">
-                            <h3 className="section-h">{t.spin}</h3>
-                            <div className="elite-card" style={{ textAlign: 'center', padding: '30px 20px', position: 'relative' }}>
-                                <div style={{ position: 'relative', width: '260px', height: '260px', margin: '0 auto 30px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                    <div ref={wheelRef} style={{ width: '100%', height: '100%', borderRadius: '50%', border: '8px solid #f1f5f9', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', overflow: 'hidden', transition: 'transform 4s cubic-bezier(0.1, 0, 0, 1)' }}>
-                                        <canvas ref={canvasRef} width="260" height="260"></canvas>
-                                    </div>
-                                    <div style={{ position: 'absolute', top: '-15px', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '15px solid transparent', borderRight: '15px solid transparent', borderTop: '25px solid #6366f1', zIndex: 10 }}></div>
-                                    <div style={{ position: 'absolute', width: '40px', height: '40px', background: 'white', borderRadius: '50%', boxShadow: '0 0 10px rgba(0,0,0,0.2)', zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#6366f1', border: '3px solid #6366f1' }}>WIN</div>
-                                </div>
-                                <button className="btn-elite" onClick={enhancedSpinWheel} disabled={isSpinning}>Spin for 5 Points</button>
-                                <button className="btn-elite btn-ghost" onClick={() => handleSetView('list-view')}>{t.backBtn}</button>
-                            </div>
-                        </div>
-                    )}
-
-                </div>
-
-                {/* Footer NavBar */}
-                <div className={`nav-bar-container ${navOpen ? 'open' : ''}`}>
-                    <div className="expanded-menu">
-                        <div onClick={() => router.push('/leaderboard')} className="nav-item">
-                            <i style={{ background: '#fdf2f8', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>🏆</i>
-                            <span style={{ fontSize: '0.6rem' }}>Leaderboard</span>
-                        </div>
-                        <div onClick={() => { handleSetView('support-view'); setNavOpen(false); }} className="nav-item">
-                            <i style={{ background: '#f1f5f9', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>🛠️</i>
-                            <span style={{ fontSize: '0.6rem' }}>Support</span>
                         </div>
                     </div>
+                )}
 
-                    <div className="nav-bar">
-                        <div className={`nav-item ${view === 'list-view' ? 'active' : ''}`} onClick={() => handleSetView('list-view')}><i>🏠</i><span>{t.navMissions}</span></div>
-                        <div className="nav-item" onClick={() => router.push('/order')}><i>🚀</i><span>{t.navPromote}</span></div>
-                        <div className="nav-item" onClick={() => router.push('/profile')}><i>👤</i><span>{t.navProfile}</span></div>
-                        <div className="nav-item" onClick={toggleMenu}>
-                            <i style={{ transition: '0.3s', fontStyle: 'normal', fontSize: '1.3rem', transform: navOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}>+</i>
-                            <span>Menu</span>
+                {/* Detail View */}
+                {view === 'detail-view' && selectedTask && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-6">
+                        <div className="bg-white rounded-[1.5rem] p-5 shadow-sm border border-slate-100">
+                            <div>
+                                <h3 className="font-extrabold text-lg text-slate-800 mb-3">{selectedTask.title}</h3>
+                                <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 text-emerald-600 font-extrabold px-3 py-1.5 rounded-lg text-xs shadow-sm">
+                                    <span>💰</span> {t.missionReward} {selectedTask.reward}
+                                </div>
+                                <p className="text-sm text-slate-500 my-5 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    সঠিকভাবে নির্দেশনা অনুসরণ করে মিশনটি সম্পন্ন করুন এবং প্রমাণ সাবমিট করুন।
+                                </p>
+                                <a href={selectedTask.link} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-slate-800 text-white text-sm font-bold shadow-lg shadow-slate-800/20 hover:bg-slate-700 transition-colors">
+                                    {t.performTask}
+                                </a>
+                            </div>
+
+                            <div className="mt-6 pt-6 border-t border-slate-100">
+                                <div className="mb-4">
+                                    <label className="block text-[11px] font-extrabold text-slate-500 mb-2 ml-1 uppercase tracking-wide">{t.proofLabel}</label>
+                                    <textarea 
+                                        value={proofInput} 
+                                        onChange={(e) => setProofInput(e.target.value)} 
+                                        rows={2} 
+                                        placeholder="প্রমাণ হিসেবে আপনার ইউজারনেম বা আইডি দিন..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all resize-none"
+                                    ></textarea>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button className="flex-1 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors" onClick={() => handleSetView('list-view')}>
+                                        {t.cancelBtn}
+                                    </button>
+                                    <button className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:scale-[1.02] transition-all" onClick={submitProof}>
+                                        {t.submitBtn}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
+
+                {/* Spin View */}
+                {view === 'spin-view' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4">
+                        <h3 className="text-lg font-extrabold text-slate-800 px-1 mb-3 text-center">{t.spin}</h3>
+                        <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 text-center relative overflow-hidden">
+                            {/* Background decorations */}
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl -z-10"></div>
+                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-50 rounded-full blur-3xl -z-10"></div>
+
+                            <div className="relative w-[260px] h-[260px] mx-auto mb-8 flex justify-center items-center">
+                                {/* Wheel Container */}
+                                <div 
+                                    ref={wheelRef} 
+                                    className="w-full h-full rounded-full border-[8px] border-slate-50 shadow-2xl shadow-indigo-900/10 overflow-hidden"
+                                    style={{ transition: 'transform 4s cubic-bezier(0.1, 0, 0, 1)' }}
+                                >
+                                    <canvas ref={canvasRef} width="260" height="260"></canvas>
+                                </div>
+                                {/* Pointer Indicator */}
+                                <div className="absolute -top-[15px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-indigo-600 z-10 drop-shadow-md"></div>
+                                {/* Center Dot */}
+                                <div className="absolute w-[45px] h-[45px] bg-white rounded-full shadow-lg z-[5] flex items-center justify-center font-black text-indigo-600 text-xs border-[4px] border-indigo-500">
+                                    WIN
+                                </div>
+                            </div>
+
+                            <button 
+                                className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-lg shadow-lg shadow-indigo-500/30 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all mb-3" 
+                                onClick={enhancedSpinWheel} 
+                                disabled={isSpinning}
+                            >
+                                {isSpinning ? 'Spinning...' : 'Spin for 5 Points'}
+                            </button>
+                            <button className="w-full py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors" onClick={() => handleSetView('list-view')}>
+                                {t.backBtn}
+                            </button>
+                        </div>
+                    </div>
+                )}
 
             </div>
-        </>
+
+            {/* Footer Navigation Bar */}
+            <div className="fixed bottom-4 left-4 right-4 z-[1000] flex flex-col gap-3 max-w-md mx-auto">
+                {/* Expanded Menu */}
+                <div className={`bg-white/95 backdrop-blur-xl border border-white rounded-[1.5rem] p-3 flex gap-3 shadow-xl shadow-slate-900/10 transition-all duration-300 origin-bottom ${navOpen ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-8 scale-95 pointer-events-none'}`}>
+                    <div onClick={() => router.push('/leaderboard')} className="flex-1 flex flex-col items-center justify-center bg-pink-50 hover:bg-pink-100 rounded-xl py-3 cursor-pointer transition-colors">
+                        <span className="text-2xl mb-1">🏆</span>
+                        <span className="text-[10px] font-extrabold text-pink-700">Leaderboard</span>
+                    </div>
+                    <div onClick={() => { handleSetView('support-view'); setNavOpen(false); }} className="flex-1 flex flex-col items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-xl py-3 cursor-pointer transition-colors">
+                        <span className="text-2xl mb-1">🛠️</span>
+                        <span className="text-[10px] font-extrabold text-slate-700">Support</span>
+                    </div>
+                </div>
+
+                {/* Main Nav Bar */}
+                <div className="h-[70px] bg-white/95 backdrop-blur-xl rounded-[1.5rem] flex items-center justify-around shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white/50 px-2">
+                    <div className={`flex flex-col items-center justify-center w-[20%] cursor-pointer transition-all duration-300 ${view === 'list-view' ? 'text-indigo-600 -translate-y-1' : 'text-slate-400 hover:text-indigo-400'}`} onClick={() => handleSetView('list-view')}>
+                        <span className="text-xl mb-0.5">🏠</span>
+                        <span className="text-[9px] font-extrabold">{t.navMissions}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center w-[20%] text-slate-400 cursor-pointer hover:text-indigo-400 transition-all duration-300 hover:-translate-y-1" onClick={() => router.push('/order')}>
+                        <span className="text-xl mb-0.5">🚀</span>
+                        <span className="text-[9px] font-extrabold">{t.navPromote}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center w-[20%] text-slate-400 cursor-pointer hover:text-indigo-400 transition-all duration-300 hover:-translate-y-1" onClick={() => router.push('/profile')}>
+                        <span className="text-xl mb-0.5">👤</span>
+                        <span className="text-[9px] font-extrabold">{t.navProfile}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center w-[20%] text-slate-400 cursor-pointer" onClick={toggleMenu}>
+                        <div className={`bg-indigo-500 text-white w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-md shadow-indigo-500/30 transition-transform duration-300 ${navOpen ? 'rotate-45 bg-rose-500 shadow-rose-500/30' : 'rotate-0'}`}>
+                            +
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     );
 }
 
