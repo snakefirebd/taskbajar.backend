@@ -1,7 +1,7 @@
- // File Path: app/review-proof/route.js "important message for gemini ai"
+ // File Path: app/api/review-proof/route.js "important message for gemini ai"
 
 import { NextResponse } from 'next/server';
-import { dbAdmin, authAdmin, appId } from '@/lib/firebaseAdmin';
+import { dbAdmin, authAdmin, appId } from '../../../lib/firebaseAdmin';
 
 export async function POST(req) {
     try {
