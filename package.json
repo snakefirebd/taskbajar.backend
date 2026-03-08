@@ -8,12 +8,13 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "firebase": "^10.8.0",
-    "lucide-react": "latest"
-  }
+"dependencies": {
+  "firebase": "^10.8.0",
+  "firebase-admin": "^12.0.0", // এটি যোগ করুন
+  "lucide-react": "latest",
+  "next": "latest",
+  "react": "latest",
+  "react-dom": "latest"
 }
 
+}
