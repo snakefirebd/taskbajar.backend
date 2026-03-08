@@ -1,4 +1,6 @@
-import { NextResponse } from 'next/server';
+ // File Path: app/delete-campaign/route.js "important message for gemini ai"
+ 
+ import { NextResponse } from 'next/server';
 import { dbAdmin, authAdmin, appId } from '@/lib/firebaseAdmin';
 
 export async function POST(req) {
