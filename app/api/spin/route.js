@@ -1,7 +1,7 @@
-// File Path: app/spin/route.js "important message for gemini ai"
+// File Path: app/api/spin/route.js "important message for gemini ai"
 
 import { NextResponse } from 'next/server';
-import { dbAdmin, authAdmin, appId } from '@/lib/firebaseAdmin';
+import { dbAdmin, authAdmin, appId } from '../../../lib/firebaseAdmin';
 
 const prizes = [0, 2, 5, 10, 20, 0, 50, 5];
 const SPIN_COST = 5;
